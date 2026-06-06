@@ -63,9 +63,9 @@ def main() -> int:
 
     # ---------------- Build the engine wiring ----------------
     print("\n[1/6] Building EngineConfig + RetrievalService + LLMClient ...")
-    from ofofo_engine.config import EngineConfig
-    from ofofo_engine.llm import LLMClient
-    from ofofo_engine.retrieval import RetrievalService
+    from engine.config import EngineConfig
+    from engine.llm import LLMClient
+    from engine.retrieval import RetrievalService
 
     engine_cfg = EngineConfig(
         groq_api_key=settings.groq_api_key,

@@ -11,7 +11,6 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent     # sme_chatbot/
 
 
@@ -38,11 +37,14 @@ class AppSettings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6380/0"
 
-    # Shared engine
-    ofofo_vector_db_path: Path = Field(
-        default=_PROJECT_ROOT.parent.parent / "milestone_two" / "db" / "ofofo_vectors.db"
-    )
+    # Vector store
+    #   Local dev  : file-backed Milvus Lite at this path.
+    #   Production : leave the path as-is and set MILVUS_URI + MILVUS_TOKEN
+    #                (managed Milvus / Zilliz Cloud), which take precedence.
+    ofofo_vector_db_path: Path = Field(default=_PROJECT_ROOT / "data" / "vectors.db")
     ofofo_embedding_model: str = "all-MiniLM-L6-v2"
+    milvus_uri: str = ""
+    milvus_token: str = ""
 
     # LLM
     groq_api_key: str = ""

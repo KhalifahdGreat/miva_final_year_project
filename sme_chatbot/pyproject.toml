@@ -77,7 +77,7 @@ build-backend = "setuptools.build_meta"
 # Editable install: list the top-level packages that ship with sme-chatbot.
 # The shared engine lives at ../../ofofo_engine and is reached at runtime via
 # PYTHONPATH (see Makefile), so we deliberately do NOT include it here.
-packages = ["core", "adapters", "app", "app.routers", "app.workers"]
+packages = ["engine", "core", "adapters", "app", "app.routers", "app.workers"]
 
 [tool.ruff]
 line-length = 100

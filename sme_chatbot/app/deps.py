@@ -3,9 +3,8 @@
 These factories build the orchestrator (and its dependencies) once per
 application lifetime via lru_cache, then inject them into route handlers.
 
-Reuses `ofofo_engine.retrieval.RetrievalService` and
-`ofofo_engine.llm.LLMClient` directly — the heart of the "library import"
-pattern.
+Reuses the self-contained `engine.retrieval.RetrievalService` and
+`engine.llm.LLMClient` directly — the heart of the "library import" pattern.
 """
 
 from __future__ import annotations
@@ -15,39 +14,36 @@ from pathlib import Path
 
 from .config import get_settings
 
-
 # ---------------------------------------------------------------------------
 # Shared engine reuse
 # ---------------------------------------------------------------------------
 
 
 def _build_engine_config():
-    """Build an `ofofo_engine.config.EngineConfig` from our app settings.
-
-    We import inside the function so a missing parent package fails clearly
-    only when a route that actually needs it is hit.
-    """
-    from ofofo_engine.config import EngineConfig
+    """Build an `engine.config.EngineConfig` from our app settings."""
+    from engine.config import EngineConfig
 
     s = get_settings()
     return EngineConfig(
         groq_api_key=s.groq_api_key,
         llm_model=s.llm_model,
         vector_db_path=Path(s.ofofo_vector_db_path).resolve(),
+        milvus_uri=s.milvus_uri,
+        milvus_token=s.milvus_token,
         embedding_model=s.ofofo_embedding_model,
     )
 
 
 @lru_cache(maxsize=1)
 def get_retrieval_service():
-    from ofofo_engine.retrieval import RetrievalService
+    from engine.retrieval import RetrievalService
 
     return RetrievalService(_build_engine_config())
 
 
 @lru_cache(maxsize=1)
 def get_llm_client():
-    from ofofo_engine.llm import LLMClient
+    from engine.llm import LLMClient
 
     return LLMClient(_build_engine_config())
 
@@ -84,6 +80,7 @@ def get_history_store():
     from core.orchestrator import InMemoryHistoryStore
     try:
         from core.conversation_store import PostgresHistoryStore
+
         from .db import init_pool
         return PostgresHistoryStore(init_pool())
     except Exception:                                     # pragma: no cover
@@ -95,6 +92,7 @@ def get_audit_store():
     """Postgres-backed audit store, or None when DB is unavailable."""
     try:
         from core.conversation_store import AuditStore
+
         from .db import init_pool
         return AuditStore(init_pool())
     except Exception:                                     # pragma: no cover
@@ -145,8 +143,6 @@ def get_whatsapp_adapter():
 @lru_cache(maxsize=1)
 def get_widget_adapter():
     from adapters.widget import WidgetAdapter
-
-    s = get_settings()
 
     def tenant_resolver(widget_key: str):
         # TODO: lookup tenant_widget_keys table

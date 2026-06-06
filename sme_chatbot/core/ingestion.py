@@ -16,7 +16,6 @@ Supported source formats:
 
 from __future__ import annotations
 
-import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -277,7 +276,7 @@ def ingest(
                  "boost": effective_boost,}
             ),
         }
-        for c, emb in zip(refined, embeddings)
+        for c, emb in zip(refined, embeddings, strict=False)
     ]
 
     try:
@@ -318,6 +317,8 @@ def _ensure_tenant_collection(client, name: str, *, dim: int) -> None:
     ]
     schema = CollectionSchema(fields=fields, enable_dynamic_field=True)
     index_params = client.prepare_index_params()
-    index_params.add_index(field_name="embedding", index_type="FLAT", metric_type="COSINE")
+    # AUTOINDEX is supported by both Milvus Lite (local dev) and Zilliz Cloud's
+    # serverless tier (production); FLAT is rejected by the latter.
+    index_params.add_index(field_name="embedding", index_type="AUTOINDEX", metric_type="COSINE")
     client.create_collection(collection_name=name, schema=schema, index_params=index_params)
     log.info("created tenant collection: %s", name)

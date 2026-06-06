@@ -17,7 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app:/ofofo_engine_root
+    PYTHONPATH=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -44,16 +44,12 @@ RUN pip install --upgrade pip && \
         "structlog==24.*"
 
 # Application code.
+COPY engine    ./engine
 COPY core      ./core
 COPY adapters  ./adapters
 COPY app       ./app
 COPY scripts   ./scripts
 COPY migrations ./migrations
-
-# The shared engine is mounted at runtime under /ofofo_engine_root/ofofo_engine
-# (see render.yaml). We add a stub so imports work in environments where the
-# engine is baked into the image instead.
-RUN mkdir -p /ofofo_engine_root
 
 EXPOSE 8000
 
@@ -63,6 +59,17 @@ ENV SERVICE_ROLE=web
 COPY <<'EOF' /app/start.sh
 #!/usr/bin/env sh
 set -e
+
+# Apply the (idempotent) schema before the web role starts serving. Every
+# CREATE in migrations/001_initial.sql uses IF NOT EXISTS, so running this on
+# each boot is safe and keeps the production DB in sync without a manual step.
+if [ "${SERVICE_ROLE:-web}" = "web" ] && [ -n "${DATABASE_URL}" ]; then
+    echo "[start] applying database migrations ..."
+    python scripts/apply_migrations.py || {
+        echo "[start] migration step failed; continuing to boot" >&2
+    }
+fi
+
 case "${SERVICE_ROLE:-web}" in
     web)
         exec gunicorn app.main:app \

@@ -88,14 +88,16 @@ def main() -> int:
     from core.conversation_store import AuditStore, PostgresHistoryStore
     from core.orchestrator import SMEOrchestrator
     from core.types import CanonicalMessage
-    from ofofo_engine.config import EngineConfig
-    from ofofo_engine.llm import LLMClient
-    from ofofo_engine.retrieval import RetrievalService
+    from engine.config import EngineConfig
+    from engine.llm import LLMClient
+    from engine.retrieval import RetrievalService
 
     engine_cfg = EngineConfig(
         groq_api_key=settings.groq_api_key,
         llm_model=settings.llm_model,
         vector_db_path=Path(settings.ofofo_vector_db_path).resolve(),
+        milvus_uri=settings.milvus_uri,
+        milvus_token=settings.milvus_token,
         embedding_model=settings.ofofo_embedding_model,
     )
     retrieval = RetrievalService(engine_cfg)

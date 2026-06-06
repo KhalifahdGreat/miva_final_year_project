@@ -62,8 +62,14 @@ envVarGroups:
         value: llama-3.3-70b-versatile
       - key: OFOFO_EMBEDDING_MODEL
         value: all-MiniLM-L6-v2
-      - key: OFOFO_VECTOR_DB_PATH
-        value: /data/ofofo_vectors.db   # mount a persistent disk under /data
+
+      # Managed Milvus (Zilliz Cloud). Shared by the web + worker services so
+      # documents ingested by the worker are visible to the web service.
+      # Supply these in the Render UI before first deploy.
+      - key: MILVUS_URI
+        sync: false
+      - key: MILVUS_TOKEN
+        sync: false
 
       # WhatsApp Cloud API. Leave blank until you've completed the Meta
       # Business Manager onboarding (see ASKS.md).
