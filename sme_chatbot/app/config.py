@@ -29,13 +29,14 @@ class AppSettings(BaseSettings):
     app_port: int = 8000
     app_log_level: str = "INFO"
 
-    # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/sme_chatbot"
+    # Database — real value comes from DATABASE_URL in the environment (.env).
+    # The fallback intentionally carries no embedded credentials.
+    database_url: str = "postgresql://localhost:5433/sme_chatbot"
     database_pool_min: int = 1
     database_pool_max: int = 10
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:6380/0"
 
     # Shared engine
     ofofo_vector_db_path: Path = Field(
