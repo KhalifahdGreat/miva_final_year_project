@@ -1,0 +1,79 @@
+# Render Blueprint — one-click deploy.
+#
+# Pre-requisites (you do these once in the Render UI before clicking
+# "Apply" on this blueprint):
+#
+#   1. Create a free PostgreSQL instance     -> save the External URL
+#   2. Create a free Redis instance          -> save the URL
+#   3. Have a GROQ_API_KEY ready             -> https://console.groq.com
+#   4. (Later, when WhatsApp is connected)
+#         WHATSAPP_VERIFY_TOKEN  (any random string you choose)
+#         WHATSAPP_APP_SECRET    (from Meta App settings)
+#
+# The blueprint defines two services from the same Docker image: a web
+# service running FastAPI and a background worker running RQ. They share
+# the same secrets via an env-group.
+
+services:
+  - type: web
+    name: sme-chatbot-api
+    runtime: docker
+    plan: starter            # $7/mo Render plan; "free" is fine for the pilot
+    region: frankfurt        # closest to Nigeria with reasonable pricing
+    rootDir: final_year_project/sme_chatbot
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: SERVICE_ROLE
+        value: web
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: WEB_CONCURRENCY
+        value: 2
+      - fromGroup: sme-chatbot-shared
+
+  - type: worker
+    name: sme-chatbot-worker
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    rootDir: final_year_project/sme_chatbot
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: SERVICE_ROLE
+        value: worker
+      - fromGroup: sme-chatbot-shared
+
+envVarGroups:
+  - name: sme-chatbot-shared
+    envVars:
+      # Required — supply these in the Render UI before first deploy.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+
+      # LLM / engine settings (safe defaults).
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OFOFO_EMBEDDING_MODEL
+        value: all-MiniLM-L6-v2
+      - key: OFOFO_VECTOR_DB_PATH
+        value: /data/ofofo_vectors.db   # mount a persistent disk under /data
+
+      # WhatsApp Cloud API. Leave blank until you've completed the Meta
+      # Business Manager onboarding (see ASKS.md).
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: META_GRAPH_API_BASE
+        value: https://graph.facebook.com/v20.0
+
+      # Widget CORS allow-list (comma-separated).
+      - key: WIDGET_ALLOWED_ORIGINS
+        value: https://your-dashboard.vercel.app

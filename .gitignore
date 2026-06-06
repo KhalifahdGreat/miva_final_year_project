@@ -1,0 +1,39 @@
+# --- Secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.key
+*credentials*.json
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Node / Next.js (dashboard + widget) ---
+node_modules/
+.next/
+.vercel/
+.turbo/
+out/
+
+# --- Local data / vector stores (regenerated, can be large) ---
+*.db
+*.sqlite
+*.sqlite3
+.milvus.db.lock
+
+# --- OS / editor cruft ---
+.DS_Store
+*.log
+*.local

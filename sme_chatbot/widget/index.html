@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SME Chatbot — Widget demo host</title>
+    <style>
+      :root {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #f5f6f8;
+        color: #111;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+      .card {
+        max-width: 540px;
+        padding: 32px 36px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06),
+          0 8px 24px rgba(0, 0, 0, 0.08);
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; }
+      p  { color: #4b5563; line-height: 1.5; }
+      code {
+        background: #eef0f3;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Demo host page</h1>
+      <p>
+        This page exists only to render the embeddable widget during local
+        development. In production an SME drops a single
+        <code>&lt;script&gt;</code> tag onto their own site and the widget
+        loads exactly the way you see it here.
+      </p>
+      <p>
+        Open this page with <code>npm run dev</code> in
+        <code>widget/</code>. The chat bubble appears bottom-right and
+        connects to the FastAPI backend on
+        <code>http://localhost:8000</code>.
+      </p>
+    </main>
+
+    <script type="module">
+      import "./src/main.ts";
+      window.SmeChatbot?.init({
+        apiBase: "http://localhost:8000",
+        widgetKey: "demo-widget-key-replace-me",
+        title: "Customer support",
+      });
+    </script>
+  </body>
+</html>
