@@ -1,34 +1,29 @@
 # Render Blueprint — one-click deploy.
 #
-# Pre-requisites (you do these once in the Render UI before clicking
-# "Apply" on this blueprint):
+# This file lives at the repository root (Render only reads render.yaml from
+# the root). The application itself lives in the sme_chatbot/ subdirectory,
+# referenced below via `rootDir`.
 #
-#   1. Create a free PostgreSQL instance     -> save the External URL
-#   2. Create a free Redis instance          -> save the URL
-#   3. Have a GROQ_API_KEY ready             -> https://console.groq.com
-#   4. (Later, when WhatsApp is connected)
-#         WHATSAPP_VERIFY_TOKEN  (any random string you choose)
-#         WHATSAPP_APP_SECRET    (from Meta App settings)
+# Before clicking "Apply" you supply the secret env vars (sync: false) in the
+# Render UI: DATABASE_URL, REDIS_URL, GROQ_API_KEY, MILVUS_URI, MILVUS_TOKEN.
+# WhatsApp values can stay blank until Meta onboarding is complete.
 #
-# The blueprint defines two services from the same Docker image: a web
-# service running FastAPI and a background worker running RQ. They share
-# the same secrets via an env-group.
+# Two services share one Docker image: a web service (FastAPI) and a
+# background worker (RQ), wired to the same secrets via an env-group.
 
 services:
   - type: web
     name: sme-chatbot-api
     runtime: docker
-    plan: starter            # $7/mo Render plan; "free" is fine for the pilot
-    region: frankfurt        # closest to Nigeria with reasonable pricing
-    rootDir: final_year_project/sme_chatbot
+    plan: starter            # ~$7/mo
+    region: frankfurt
+    rootDir: sme_chatbot
     dockerfilePath: ./Dockerfile
     autoDeploy: true
     healthCheckPath: /health
     envVars:
       - key: SERVICE_ROLE
         value: web
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: WEB_CONCURRENCY
         value: 2
       - fromGroup: sme-chatbot-shared
@@ -38,7 +33,7 @@ services:
     runtime: docker
     plan: starter
     region: frankfurt
-    rootDir: final_year_project/sme_chatbot
+    rootDir: sme_chatbot
     dockerfilePath: ./Dockerfile
     autoDeploy: true
     envVars:
@@ -65,14 +60,12 @@ envVarGroups:
 
       # Managed Milvus (Zilliz Cloud). Shared by the web + worker services so
       # documents ingested by the worker are visible to the web service.
-      # Supply these in the Render UI before first deploy.
       - key: MILVUS_URI
         sync: false
       - key: MILVUS_TOKEN
         sync: false
 
-      # WhatsApp Cloud API. Leave blank until you've completed the Meta
-      # Business Manager onboarding (see ASKS.md).
+      # WhatsApp Cloud API. Leave blank until Meta onboarding is complete.
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_APP_SECRET
@@ -80,6 +73,6 @@ envVarGroups:
       - key: META_GRAPH_API_BASE
         value: https://graph.facebook.com/v20.0
 
-      # Widget CORS allow-list (comma-separated).
+      # Widget CORS allow-list (comma-separated). Update with the Vercel URL.
       - key: WIDGET_ALLOWED_ORIGINS
         value: https://your-dashboard.vercel.app
