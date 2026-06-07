@@ -142,10 +142,35 @@ def get_whatsapp_adapter():
 
 @lru_cache(maxsize=1)
 def get_widget_adapter():
+    import logging
+
     from adapters.widget import WidgetAdapter
 
+    log = logging.getLogger(__name__)
+
     def tenant_resolver(widget_key: str):
-        # TODO: lookup tenant_widget_keys table
-        return None
+        """Map a widget key → (tenant_id, allowed_origins) from Postgres.
+
+        Returns None for unknown/revoked keys (the adapter raises 403).
+        """
+        try:
+            from .db import pool
+
+            with pool().connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT tenant_id, allowed_origins
+                        FROM tenant_widget_keys
+                        WHERE widget_key = %s AND revoked_at IS NULL
+                    """,
+                    (widget_key,),
+                )
+                row = cur.fetchone()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("widget key lookup failed: %s", exc)
+            return None
+        if not row:
+            return None
+        return str(row[0]), list(row[1] or [])
 
     return WidgetAdapter(tenant_resolver=tenant_resolver)

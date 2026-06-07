@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from core.tenant_service import default_config
 from core.types import EscalationRule, TenantConfig
 
+from ..db import pool as get_pool
 from ..deps import get_tenant_service
 
 router = APIRouter(prefix="/v1/tenants", tags=["tenants"])
@@ -25,6 +27,18 @@ class TenantOut(BaseModel):
     tone: str
     languages: list[str]
     version: int
+
+
+class CreateWidgetKeyRequest(BaseModel):
+    # Empty list = accept any Origin (handy for local/testing). In production
+    # set the dashboard / customer site origins explicitly.
+    allowed_origins: list[str] = []
+
+
+class WidgetKeyOut(BaseModel):
+    widget_key: str
+    tenant_id: str
+    allowed_origins: list[str]
 
 
 class TenantConfigUpdate(BaseModel):
@@ -65,6 +79,34 @@ def get_tenant(tenant_id: str, tenants=Depends(get_tenant_service)):
         languages=list(cfg.languages),
         version=cfg.version,
     )
+
+
+@router.post("/{tenant_id}/widget-keys", response_model=WidgetKeyOut)
+def create_widget_key(
+    tenant_id: str,
+    body: CreateWidgetKeyRequest,
+    tenants=Depends(get_tenant_service),
+):
+    """Mint a widget key the web chat uses to open sessions for this tenant."""
+    try:
+        tenants.get(tenant_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    key = "wk_" + secrets.token_urlsafe(24)
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO tenant_widget_keys (widget_key, tenant_id, allowed_origins)
+                VALUES (%s, %s, %s)
+                """,
+                (key, tenant_id, body.allowed_origins),
+            )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"could not create key: {exc}") from exc
+
+    return WidgetKeyOut(widget_key=key, tenant_id=tenant_id, allowed_origins=body.allowed_origins)
 
 
 @router.patch("/{tenant_id}/config", response_model=TenantOut)
