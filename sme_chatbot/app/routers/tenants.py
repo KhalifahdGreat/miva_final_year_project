@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 import uuid
 
@@ -52,9 +53,30 @@ class TenantConfigUpdate(BaseModel):
     brand_voice_examples: list[str] | None = None
 
 
+def _slugify(name: str, tid: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "tenant"
+    return f"{base[:40]}-{tid[:8]}"
+
+
 @router.post("", response_model=TenantOut)
 def create_tenant(body: CreateTenantRequest, tenants=Depends(get_tenant_service)):
     tid = str(uuid.uuid4())
+
+    # Register the canonical tenant row so FK-bound tables (widget keys,
+    # memberships, channels) can reference it. Idempotent on tenant_id.
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO tenants (tenant_id, business_name, slug)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (tenant_id) DO NOTHING
+                """,
+                (tid, body.business_name, _slugify(body.business_name, tid)),
+            )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"could not create tenant: {exc}") from exc
+
     cfg = default_config(tid, body.business_name)
     tenants.save(cfg)
     return TenantOut(
