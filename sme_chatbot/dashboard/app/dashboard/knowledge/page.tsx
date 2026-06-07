@@ -1,98 +1,152 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import useSWR from "swr";
+import { useTenant } from "@/lib/tenant";
+import { API_BASE, fetcher, type DocItem } from "@/lib/api";
+import { PageHead, Badge, Empty, Skeleton, useToast } from "@/components/ui";
+import { NoTenant } from "@/components/common";
+import { Icon } from "@/components/icons";
+import { fmtBytes, timeAgo } from "@/lib/format";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const DOC_TYPES = [
+  { v: "faq", label: "FAQ" },
+  { v: "catalogue", label: "Catalogue" },
+  { v: "pricing", label: "Pricing" },
+  { v: "policy", label: "Policy" },
+  { v: "manual_faq", label: "Manual / guide" },
+];
 
-type DocType = "catalogue" | "faq" | "policy" | "manual_faq" | "pricing";
+const STATUS_TONE: Record<string, string> = {
+  ready: "green", processing: "blue", queued: "slate", failed: "red",
+};
 
 export default function KnowledgePage() {
-  const [tenantId, setTenantId] = useState("");
-  const [docType, setDocType] = useState<DocType>("faq");
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<string>("");
-  const [busy, setBusy] = useState(false);
+  const { tenantId } = useTenant();
+  const toast = useToast();
+  const base = tenantId ? `/v1/tenants/${tenantId}/documents` : null;
+  const [docType, setDocType] = useState("faq");
+  const [drag, setDrag] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  async function upload() {
-    if (!file || !tenantId) {
-      setStatus("Tenant ID and file are both required.");
-      return;
+  const { data, isLoading, mutate } = useSWR<{ items: DocItem[] }>(base, fetcher, {
+    refreshInterval: (d) => (d?.items.some((x) => ["queued", "processing"].includes(x.status)) ? 2500 : 0),
+  });
+
+  async function upload(files: FileList | null) {
+    if (!files || !files.length || !tenantId) return;
+    setUploading(true);
+    let ok = 0;
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("document_type", docType);
+      try {
+        const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/documents`, { method: "POST", body: fd });
+        if (!res.ok) throw new Error(await res.text());
+        ok++;
+      } catch (e) { toast(`Upload failed: ${String(e)}`, "error"); }
     }
-    const fd = new FormData();
-    fd.append("document_type", docType);
-    fd.append("file", file);
-    setBusy(true);
-    setStatus("Uploading...");
-    try {
-      const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/documents`, {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setStatus(
-          `OK — ${data.chunks_created} chunks created in ${data.duration_s}s.`,
-        );
-      } else {
-        setStatus(`Failed (${res.status}): ${JSON.stringify(data)}`);
-      }
-    } catch (err) {
-      setStatus(`Network error: ${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
+    if (ok) toast(`${ok} file${ok > 1 ? "s" : ""} uploaded — indexing…`, "success");
+    setUploading(false);
+    void mutate();
   }
+
+  async function remove(id: string) {
+    if (!tenantId || !confirm("Remove this document from the knowledge base?")) return;
+    try {
+      await fetch(`${API_BASE}/v1/tenants/${tenantId}/documents/${id}`, { method: "DELETE" });
+      toast("Document removed", "success");
+      void mutate();
+    } catch (e) { toast(`Delete failed: ${String(e)}`, "error"); }
+  }
+
+  async function download(id: string) {
+    try {
+      const r = await fetch(`${API_BASE}/v1/tenants/${tenantId}/documents/${id}/download`);
+      if (!r.ok) throw new Error(await r.text());
+      const { url } = await r.json();
+      window.open(url, "_blank");
+    } catch (e) { toast(`No file available: ${String(e)}`, "error"); }
+  }
+
+  if (!tenantId) return (<><PageHead title="Knowledge" /><NoTenant /></>);
+
+  const items = data?.items ?? [];
+  const ready = items.filter((d) => d.status === "ready").length;
+  const chunks = items.reduce((s, d) => s + (d.chunk_count || 0), 0);
 
   return (
     <>
-      <h1>Knowledge</h1>
-      <p style={{ color: "var(--muted)" }}>
-        Upload your catalogue, FAQs, return policy — anything the bot should ground its answers in.
-      </p>
+      <PageHead title="Knowledge base" lede="Upload your catalogue, FAQs and policies. The bot only answers from what you provide here." />
 
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Upload a document</h3>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-          <div>
-            <label>Tenant ID</label>
-            <input value={tenantId} onChange={(e) => setTenantId(e.target.value)} placeholder="uuid" />
-          </div>
-          <div>
-            <label>Type</label>
-            <select value={docType} onChange={(e) => setDocType(e.target.value as DocType)}>
-              <option value="catalogue">Product catalogue</option>
-              <option value="faq">FAQ</option>
-              <option value="manual_faq">Curated Q/A pair</option>
-              <option value="policy">Policy</option>
-              <option value="pricing">Pricing</option>
-            </select>
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label>File</label>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                   accept=".pdf,.docx,.txt,.md,.csv,.xlsx" />
-          </div>
+      <div className="grid grid-3" style={{ marginBottom: 18 }}>
+        <div className="card card-pad"><div className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>DOCUMENTS</div><div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>{items.length}</div></div>
+        <div className="card card-pad"><div className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>INDEXED</div><div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>{ready}</div></div>
+        <div className="card card-pad"><div className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>SEARCHABLE CHUNKS</div><div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>{chunks}</div></div>
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: 18 }}>
+        <div className="row" style={{ marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+          <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Document type:</span>
+          {DOC_TYPES.map((t) => (
+            <span key={t.v} className={`chip ${docType === t.v ? "on" : ""}`} onClick={() => setDocType(t.v)}>{t.label}</span>
+          ))}
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
-          <button className="btn" disabled={busy} onClick={upload}>
-            {busy ? "Uploading..." : "Upload"}
-          </button>
-          {status && <span style={{ color: "var(--muted)" }}>{status}</span>}
+        <div
+          className={`dropzone ${drag ? "drag" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); void upload(e.dataTransfer.files); }}
+        >
+          <div style={{ display: "grid", placeItems: "center", gap: 8 }}>
+            {uploading ? <span className="spinner dark" /> : <Icon name="upload" size={26} />}
+            <div style={{ fontWeight: 600 }}>{uploading ? "Uploading…" : "Drop files here or click to browse"}</div>
+            <div className="hint">PDF, DOCX, TXT, CSV, MD · up to ~10 MB each</div>
+          </div>
+          <input ref={inputRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.csv,.md"
+                 onChange={(e) => void upload(e.target.files)} />
         </div>
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Uploaded documents</h3>
-        <table>
-          <thead>
-            <tr><th>Title</th><th>Type</th><th>Chunks</th><th>Status</th><th>Uploaded</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={5} style={{ color: "var(--muted)" }}>(Document listing will appear after Sprint 2.)</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="card-head"><div><h3>Documents</h3></div></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Title</th><th>Type</th><th>Size</th><th>Chunks</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+              {isLoading && [0, 1, 2].map((i) => (
+                <tr key={i}><td colSpan={7}><Skeleton h={20} /></td></tr>
+              ))}
+              {!isLoading && items.map((d) => (
+                <tr key={d.document_id}>
+                  <td style={{ fontWeight: 600 }}>{d.title}</td>
+                  <td><Badge tone="slate">{d.document_type}</Badge></td>
+                  <td className="muted">{fmtBytes(d.byte_size)}</td>
+                  <td>{d.chunk_count || "—"}</td>
+                  <td>
+                    <Badge tone={STATUS_TONE[d.status] ?? "slate"} dot>
+                      {d.status === "processing" || d.status === "queued" ? <>{d.status}…</> : d.status}
+                    </Badge>
+                    {d.status === "failed" && d.error_message && <div className="hint" style={{ color: "var(--danger)" }}>{d.error_message.slice(0, 80)}</div>}
+                  </td>
+                  <td className="muted">{timeAgo(d.updated_at)}</td>
+                  <td>
+                    <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
+                      {d.has_file && <button className="btn btn-ghost btn-icon btn-sm" title="Download original" onClick={() => download(d.document_id)}><Icon name="download" size={15} /></button>}
+                      <button className="btn btn-ghost btn-icon btn-sm" title="Remove" onClick={() => remove(d.document_id)}><Icon name="trash" size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!isLoading && items.length === 0 && (
+                <tr><td colSpan={7}><Empty icon="book" title="No documents yet" hint="Upload your first FAQ or catalogue above to teach the bot." /></td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

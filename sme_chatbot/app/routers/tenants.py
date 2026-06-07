@@ -29,6 +29,10 @@ class TenantOut(BaseModel):
     tone: str
     languages: list[str]
     version: int
+    tagline: str | None = None
+    greeting: str | None = None
+    fallback: str | None = None
+    out_of_hours: str | None = None
 
 
 class CreateWidgetKeyRequest(BaseModel):
@@ -102,6 +106,37 @@ def create_tenant(body: CreateTenantRequest, tenants=Depends(get_tenant_service)
     )
 
 
+@router.get("")
+def list_tenants():
+    """List tenants for the workspace switcher (id + name + channel flags)."""
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT t.tenant_id, t.business_name, t.created_at,
+                        (wa.tenant_id IS NOT NULL) AS whatsapp_connected
+                    FROM tenants t
+                    LEFT JOIN tenant_whatsapp_credentials wa ON wa.tenant_id = t.tenant_id
+                    ORDER BY t.created_at DESC
+                    LIMIT 200
+                """
+            )
+            rows = cur.fetchall()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "items": [
+            {
+                "tenant_id": str(r[0]),
+                "business_name": r[1],
+                "created_at": r[2].isoformat() if r[2] else None,
+                "whatsapp_connected": bool(r[3]),
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/{tenant_id}", response_model=TenantOut)
 def get_tenant(tenant_id: str, tenants=Depends(get_tenant_service)):
     try:
@@ -114,6 +149,10 @@ def get_tenant(tenant_id: str, tenants=Depends(get_tenant_service)):
         tone=cfg.tone,
         languages=list(cfg.languages),
         version=cfg.version,
+        tagline=cfg.tagline,
+        greeting=cfg.greeting,
+        fallback=cfg.fallback,
+        out_of_hours=cfg.out_of_hours,
     )
 
 
