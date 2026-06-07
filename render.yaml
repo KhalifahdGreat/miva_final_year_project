@@ -24,8 +24,11 @@ services:
     envVars:
       - key: SERVICE_ROLE
         value: web
+      # One gunicorn worker on the 512 MB starter tier: each worker lazily
+      # loads the ONNX embedder (~250 MB), so two would risk OOM. Scale this
+      # up once the instance has more RAM.
       - key: WEB_CONCURRENCY
-        value: 2
+        value: 1
       - fromGroup: sme-chatbot-shared
 
   - type: worker

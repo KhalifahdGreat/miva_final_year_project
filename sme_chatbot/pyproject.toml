@@ -23,9 +23,11 @@ dependencies = [
     "redis==5.*",
     "rq==1.16.*",
 
-    # Vector + embeddings (reuses the shared corpus via ofofo_engine)
+    # Vector + embeddings. fastembed runs all-MiniLM-L6-v2 on ONNX Runtime
+    # (~250 MB resident) instead of the PyTorch sentence-transformers stack
+    # (~1 GB), so ingestion + retrieval fit on small cloud instances.
     "pymilvus==2.4.*",
-    "sentence-transformers==3.*",
+    "fastembed==0.3.*",
 
     # LLM provider
     "groq==0.11.*",

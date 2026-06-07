@@ -1,7 +1,13 @@
 """Vector retrieval.
 
-Instance-based wrapper around Milvus Lite and SentenceTransformers. No
+Instance-based wrapper around Milvus and an ONNX sentence embedder. No
 module-level singletons — each ``RetrievalService`` owns its connections.
+
+The embedding *model* is ``sentence-transformers/all-MiniLM-L6-v2`` (384-d),
+but it is run through :mod:`fastembed` (ONNX Runtime) rather than PyTorch.
+Same weights, same vector space, a fraction of the memory — the PyTorch +
+``sentence-transformers`` stack needs ~1 GB resident, which OOM-kills small
+(512 MB) cloud instances; the ONNX path stays under ~300 MB.
 """
 
 from __future__ import annotations
@@ -18,6 +24,54 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _fastembed_model_name(name: str) -> str:
+    """Map a short model id to the fully-qualified id fastembed expects."""
+    return name if "/" in name else f"sentence-transformers/{name}"
+
+
+class _OnnxEmbedder:
+    """Adapter exposing the slice of the SentenceTransformer API we use,
+    backed by fastembed's ONNX runtime.
+
+    Supports ``encode(texts, normalize_embeddings=...)`` and
+    ``get_sentence_embedding_dimension()`` — the only two surfaces the
+    ingestion pipeline and retrieval search rely on.
+    """
+
+    def __init__(self, model_name: str) -> None:
+        from fastembed import TextEmbedding
+
+        self._name = _fastembed_model_name(model_name)
+        self._model = TextEmbedding(model_name=self._name)
+        self._dim: int | None = None
+
+    def get_sentence_embedding_dimension(self) -> int:
+        if self._dim is None:
+            probe = next(iter(self._model.embed(["dimension probe"])))
+            self._dim = int(getattr(probe, "shape", (len(probe),))[0])
+        return self._dim
+
+    def encode(self, texts, *, normalize_embeddings: bool = True, **_ignored):
+        """Return a 2-D ``float32`` array (one row per input text).
+
+        Extra SentenceTransformer kwargs (``batch_size``, ``show_progress_bar``)
+        are accepted and ignored for call-site compatibility.
+        """
+        import numpy as np
+
+        single = isinstance(texts, str)
+        items = [texts] if single else list(texts)
+        if not items:
+            return np.empty((0, self.get_sentence_embedding_dimension()), dtype="float32")
+
+        arr = np.asarray(list(self._model.embed(items)), dtype="float32")
+        if normalize_embeddings:
+            norms = np.linalg.norm(arr, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            arr = arr / norms
+        return arr[0] if single else arr
+
+
 class RetrievalService:
     """Semantic search over a Milvus-Lite vector database."""
 
@@ -28,9 +82,7 @@ class RetrievalService:
 
     def _ensure_model(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-
-            self._model = SentenceTransformer(self._config.embedding_model)
+            self._model = _OnnxEmbedder(self._config.embedding_model)
         return self._model
 
     def _ensure_client(self):
