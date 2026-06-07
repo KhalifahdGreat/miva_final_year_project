@@ -73,6 +73,7 @@ envVarGroups:
       - key: META_GRAPH_API_BASE
         value: https://graph.facebook.com/v20.0
 
-      # Widget CORS allow-list (comma-separated). Update with the Vercel URL.
+      # Browser CORS allow-list (comma-separated): the admin dashboard + any
+      # sites embedding the widget.
       - key: WIDGET_ALLOWED_ORIGINS
-        value: https://your-dashboard.vercel.app
+        value: https://sme-chatbot.netlify.app
