@@ -29,6 +29,9 @@ dependencies = [
     "pymilvus==2.4.*",
     "fastembed==0.3.*",
 
+    # Credential encryption at rest (channel access tokens)
+    "cryptography==43.*",
+
     # LLM provider
     "groq==0.11.*",
 

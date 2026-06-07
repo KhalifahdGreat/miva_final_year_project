@@ -14,6 +14,7 @@ from core.types import EscalationRule, TenantConfig
 
 from ..db import pool as get_pool
 from ..deps import get_tenant_service
+from ..security import encrypt_token
 
 router = APIRouter(prefix="/v1/tenants", tags=["tenants"])
 
@@ -40,6 +41,19 @@ class WidgetKeyOut(BaseModel):
     widget_key: str
     tenant_id: str
     allowed_origins: list[str]
+
+
+class ConnectWhatsAppRequest(BaseModel):
+    waba_id: str
+    phone_number_id: str
+    access_token: str
+    display_phone: str | None = None
+
+
+class WhatsAppStatusOut(BaseModel):
+    connected: bool
+    phone_number_id: str | None = None
+    display_phone: str | None = None
 
 
 class TenantConfigUpdate(BaseModel):
@@ -129,6 +143,72 @@ def create_widget_key(
         raise HTTPException(status_code=500, detail=f"could not create key: {exc}") from exc
 
     return WidgetKeyOut(widget_key=key, tenant_id=tenant_id, allowed_origins=body.allowed_origins)
+
+
+@router.post("/{tenant_id}/channels/whatsapp", response_model=WhatsAppStatusOut)
+def connect_whatsapp(
+    tenant_id: str,
+    body: ConnectWhatsAppRequest,
+    tenants=Depends(get_tenant_service),
+):
+    """Store (or replace) a tenant's WhatsApp Cloud API credentials.
+
+    The access token is encrypted at rest. Once stored, inbound webhooks for
+    this ``phone_number_id`` route to this tenant and replies are sent with
+    this token.
+    """
+    try:
+        tenants.get(tenant_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO tenant_whatsapp_credentials
+                    (tenant_id, waba_id, phone_number_id, display_phone, access_token_enc)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (tenant_id) DO UPDATE SET
+                    waba_id          = EXCLUDED.waba_id,
+                    phone_number_id  = EXCLUDED.phone_number_id,
+                    display_phone    = EXCLUDED.display_phone,
+                    access_token_enc = EXCLUDED.access_token_enc,
+                    connected_at     = now()
+                """,
+                (
+                    tenant_id,
+                    body.waba_id,
+                    body.phone_number_id,
+                    body.display_phone,
+                    encrypt_token(body.access_token),
+                ),
+            )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"could not store credentials: {exc}") from exc
+
+    return WhatsAppStatusOut(
+        connected=True,
+        phone_number_id=body.phone_number_id,
+        display_phone=body.display_phone,
+    )
+
+
+@router.get("/{tenant_id}/channels/whatsapp", response_model=WhatsAppStatusOut)
+def whatsapp_status(tenant_id: str):
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT phone_number_id, display_phone FROM tenant_whatsapp_credentials "
+                "WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not row:
+        return WhatsAppStatusOut(connected=False)
+    return WhatsAppStatusOut(connected=True, phone_number_id=row[0], display_phone=row[1])
 
 
 @router.patch("/{tenant_id}/config", response_model=TenantOut)

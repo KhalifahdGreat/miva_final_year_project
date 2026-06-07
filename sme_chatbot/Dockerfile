@@ -37,6 +37,7 @@ RUN pip install --upgrade pip && \
         "psycopg[binary,pool]==3.2.*" "alembic==1.13.*" "sqlalchemy==2.*" \
         "redis==5.*" "rq==1.16.*" \
         "pymilvus==2.4.*" "fastembed==0.3.*" \
+        "cryptography==43.*" \
         "groq==0.11.*" "httpx==0.27.*" \
         "pypdf==4.*" "python-docx==1.*" "openpyxl==3.*" "pandas==2.*" \
         "boto3==1.34.*" \

@@ -121,15 +121,43 @@ def get_orchestrator():
 def get_whatsapp_adapter():
     from adapters.whatsapp import WhatsAppCloudAdapter
 
-    s = get_settings()
+    import logging
 
-    # In a real deployment, these resolvers consult the DB.
-    # For Sprint 1 the smoke test uses a single hard-coded tenant.
+    s = get_settings()
+    log = logging.getLogger(__name__)
+
     def tenant_resolver(phone_number_id: str) -> str | None:
-        return None  # TODO: lookup tenant_whatsapp_credentials table
+        """Map a Meta phone_number_id → tenant_id via stored credentials."""
+        try:
+            from .db import pool
+
+            with pool().connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT tenant_id FROM tenant_whatsapp_credentials "
+                    "WHERE phone_number_id = %s",
+                    (phone_number_id,),
+                )
+                row = cur.fetchone()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("whatsapp tenant lookup failed: %s", exc)
+            return None
+        return str(row[0]) if row else None
 
     def creds_provider(tenant_id: str) -> tuple[str, str]:
-        raise NotImplementedError("tenant_whatsapp_credentials not implemented yet")
+        """Return (phone_number_id, access_token) for outbound replies."""
+        from .db import pool
+        from .security import decrypt_token
+
+        with pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT phone_number_id, access_token_enc FROM tenant_whatsapp_credentials "
+                "WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            raise LookupError(f"no whatsapp credentials for tenant {tenant_id}")
+        return str(row[0]), decrypt_token(row[1])
 
     return WhatsAppCloudAdapter(
         app_secret=s.whatsapp_app_secret,
