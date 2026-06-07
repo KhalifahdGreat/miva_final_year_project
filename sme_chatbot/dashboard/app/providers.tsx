@@ -9,6 +9,12 @@ import { clerkEnabled } from "@/lib/clerk";
 // Shared theme so every Clerk surface (sign-in, sign-up, user button, account
 // modal) matches the dashboard's emerald design system.
 const clerkAppearance = {
+  layout: {
+    // Relative URL resolves to our own origin (favicon at app/icon.svg),
+    // so it works in both local dev and production.
+    logoImageUrl: "/icon.svg",
+    logoLinkUrl: "/dashboard",
+  },
   variables: {
     colorPrimary: "#059669",
     colorText: "#0f172a",
