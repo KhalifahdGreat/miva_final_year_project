@@ -21,8 +21,9 @@ log = logging.getLogger(__name__)
 
 
 def is_enabled() -> bool:
+    # Endpoint URL is optional: blank => use AWS S3's default endpoint.
     s = get_settings()
-    return bool(s.r2_endpoint_url and s.r2_access_key_id and s.r2_secret_access_key and s.r2_bucket)
+    return bool(s.r2_access_key_id and s.r2_secret_access_key and s.r2_bucket)
 
 
 @lru_cache(maxsize=1)
@@ -31,14 +32,15 @@ def _client():
     from botocore.config import Config
 
     s = get_settings()
-    return boto3.client(
-        "s3",
-        endpoint_url=s.r2_endpoint_url,
+    kwargs = dict(
         aws_access_key_id=s.r2_access_key_id,
         aws_secret_access_key=s.r2_secret_access_key,
-        region_name="auto",
+        region_name=(s.r2_region or "auto"),
         config=Config(signature_version="s3v4", retries={"max_attempts": 3}),
     )
+    if s.r2_endpoint_url:
+        kwargs["endpoint_url"] = s.r2_endpoint_url
+    return boto3.client("s3", **kwargs)
 
 
 def object_key(tenant_id: str, document_id: str, filename: str) -> str:

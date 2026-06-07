@@ -60,11 +60,15 @@ class AppSettings(BaseSettings):
     # Widget
     widget_allowed_origins: str = "http://localhost:3000"
 
-    # Object storage (Cloudflare R2)
+    # Object storage (S3-compatible: AWS S3, Cloudflare R2, Backblaze B2, …).
+    # For AWS S3 set r2_region to the bucket's region (e.g. "eu-west-1") and
+    # leave r2_endpoint_url blank to use AWS's default endpoint. For R2 keep
+    # the region "auto" and set the R2 S3 endpoint URL.
     r2_endpoint_url: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
     r2_bucket: str = "sme-chatbot-uploads"
+    r2_region: str = "auto"
 
     # Observability (all optional)
     langfuse_public_key: str = ""

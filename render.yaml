@@ -78,6 +78,8 @@ envVarGroups:
         sync: false
       - key: R2_BUCKET
         sync: false
+      - key: R2_REGION
+        sync: false
 
       # WhatsApp Cloud API. Leave blank until Meta onboarding is complete.
       - key: WHATSAPP_VERIFY_TOKEN
