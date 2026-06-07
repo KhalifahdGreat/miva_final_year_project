@@ -68,6 +68,17 @@ envVarGroups:
       - key: MILVUS_TOKEN
         sync: false
 
+      # Object storage (Cloudflare R2, S3-compatible). Leave blank to keep
+      # using ephemeral container disk; set to persist uploaded documents.
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+
       # WhatsApp Cloud API. Leave blank until Meta onboarding is complete.
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false

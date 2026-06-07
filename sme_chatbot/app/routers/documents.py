@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 
 from core.ingestion import ingest
 
+from .. import storage
 from ..db import pool as get_pool
 from ..deps import get_retrieval_service
 
@@ -26,15 +27,15 @@ ALLOWED_TYPES = {"catalogue", "faq", "policy", "manual_faq", "pricing"}
 
 
 def _insert_document(tenant_id: str, document_id: str, title: str, document_type: str,
-                      mime_type: str, byte_size: int) -> None:
+                      mime_type: str, byte_size: int, object_key: str | None = None) -> None:
     with get_pool().connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO documents (document_id, tenant_id, title, document_type,
-                                    mime_type, byte_size, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'queued')
+                                    mime_type, byte_size, status, object_key)
+            VALUES (%s, %s, %s, %s, %s, %s, 'queued', %s)
             """,
-            (document_id, tenant_id, title, document_type, mime_type, byte_size),
+            (document_id, tenant_id, title, document_type, mime_type, byte_size, object_key),
         )
 
 
@@ -99,6 +100,14 @@ async def upload_document(
         tmp.write(raw)
         tmp_path = Path(tmp.name)
 
+    # Persist the original file to object storage (R2) when configured, so it
+    # can be re-downloaded / re-ingested later. No-op if R2 isn't set up.
+    obj_key: str | None = None
+    if storage.is_enabled():
+        candidate = storage.object_key(tenant_id, document_id, file.filename or "upload")
+        if storage.upload_bytes(candidate, raw, file.content_type):
+            obj_key = candidate
+
     try:
         _insert_document(
             tenant_id=tenant_id,
@@ -107,6 +116,7 @@ async def upload_document(
             document_type=document_type,
             mime_type=file.content_type or "application/octet-stream",
             byte_size=len(raw),
+            object_key=obj_key,
         )
     except Exception as exc:                              # pragma: no cover
         log.exception("could not record document row: %s", exc)
@@ -129,7 +139,8 @@ async def upload_document(
 def list_documents(tenant_id: str):
     sql = """
         SELECT document_id, title, document_type, mime_type, byte_size,
-                chunk_count, status, error_message, created_at, updated_at
+                chunk_count, status, error_message, created_at, updated_at,
+                object_key
             FROM documents
             WHERE tenant_id = %s AND archived_at IS NULL
             ORDER BY created_at DESC
@@ -155,10 +166,34 @@ def list_documents(tenant_id: str):
             "error_message": r[7],
             "created_at": r[8].isoformat() if r[8] else None,
             "updated_at": r[9].isoformat() if r[9] else None,
+            "has_file": bool(r[10]),
         }
         for r in rows
     ]
     return {"items": items, "tenant_id": tenant_id}
+
+
+@router.get("/{tenant_id}/documents/{document_id}/download")
+def download_document(tenant_id: str, document_id: str):
+    """Return a short-lived presigned URL for the original uploaded file."""
+    try:
+        with get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT object_key FROM documents WHERE tenant_id = %s AND document_id = %s",
+                (tenant_id, document_id),
+            )
+            row = cur.fetchone()
+    except Exception as exc:                              # pragma: no cover
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not row:
+        raise HTTPException(status_code=404, detail="document not found")
+    if not row[0]:
+        raise HTTPException(status_code=404, detail="no stored file for this document")
+    url = storage.presigned_get_url(row[0])
+    if not url:
+        raise HTTPException(status_code=503, detail="object storage not configured")
+    return {"url": url}
 
 
 @router.delete("/{tenant_id}/documents/{document_id}")
