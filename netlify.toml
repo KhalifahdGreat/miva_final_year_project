@@ -7,6 +7,9 @@
 [build]
   base = "sme_chatbot/dashboard"
   command = "npm run build"
+  # Must differ from `base` or the Next.js plugin errors out. Resolved relative
+  # to `base`, i.e. sme_chatbot/dashboard/.next.
+  publish = ".next"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
