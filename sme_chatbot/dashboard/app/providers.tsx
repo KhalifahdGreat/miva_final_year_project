@@ -12,5 +12,17 @@ export function Providers({ children }: { children: ReactNode }) {
       <TenantProvider>{children}</TenantProvider>
     </ToastProvider>
   );
-  return clerkEnabled ? <ClerkProvider>{tree}</ClerkProvider> : tree;
+  return clerkEnabled ? (
+    <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+      afterSignOutUrl="/"
+    >
+      {tree}
+    </ClerkProvider>
+  ) : (
+    tree
+  );
 }
