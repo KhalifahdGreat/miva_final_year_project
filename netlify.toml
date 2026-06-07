@@ -1,0 +1,12 @@
+# Netlify build config for the Next.js admin dashboard.
+#
+# The dashboard lives in a subdirectory of this repo, so `base` points Netlify
+# at it. The official Next.js runtime plugin handles SSR/route building and
+# sets the publish directory automatically.
+
+[build]
+  base = "sme_chatbot/dashboard"
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
