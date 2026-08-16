@@ -1,4 +1,4 @@
-from core.language_detector import detect
+from core.language_detector import detect, expand_query_for_retrieval
 
 
 def test_english_short_message():
@@ -120,3 +120,18 @@ def test_all_caps_pidgin():
 def test_code_switch_yoruba_then_pidgin_stays_yoruba():
     r = detect("Mo fe ra amala abeg")
     assert r.dominant == "yo"
+
+
+def test_igbo_query_expands_for_english_kb():
+    q = expand_query_for_retrieval(
+        "Ogologo oge ole ka o ga-ewe tupu i kwadebe ofe ose na ofe afang? "
+        "Ego ole ka a ga-akwu maka ibute ha?"
+    )
+    assert detect(
+        "Ogologo oge ole ka o ga-ewe tupu i kwadebe ofe ose (pepper soup) "
+        "na ofe afang?"
+    ).dominant == "ig"
+    low = q.lower()
+    assert "price" in low
+    assert "soup" in low
+    assert "delivery" in low

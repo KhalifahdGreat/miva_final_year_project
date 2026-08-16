@@ -21,14 +21,29 @@ from dataclasses import dataclass
 from .types import TenantConfig
 
 
+# Used when the price guard fires so the customer still hears their language.
+_PRICE_FALLBACK = {
+    "en": (
+        "I'm not sure about that one — let me get a human colleague to help. "
+        "I'd rather double-check the exact figure with my colleague."
+    ),
+    "pid": "I no too sure of that figure — make I confirm with my colleague first.",
+    "yo": "Mi o daadaa mo iye owo yen. Jowo, je ki n beere lowo alabojuto mi ki n da yin lohun.",
+    "ha": "Ban tabbata wannan farashi ba. Bari in tambayi abokina na aiki in dawo da amsa.",
+    "ig": "Biko chere ntakịrị — ka m jụọ onye nọ n'usekwu ego ole ka ọ dị, ka m ghara ịgwa gị ọnụahịa na-ezighị ezi.",
+}
+
+
 # ---------------------------------------------------------------------------
 # Pattern library
 # ---------------------------------------------------------------------------
 
 
-# Money mentions: ₦, N, NGN, or "naira" followed by an amount.
+# Money mentions: ₦4,500, NGN 4500, naira 4500, or the KB form "4500 naira".
+_AMOUNT = r"(\d{1,3}(?:[,.\s]\d{3})*(?:\.\d{1,2})?|\d{2,7}(?:\.\d{1,2})?)"
 _NGN_PRICE = re.compile(
-    r"(?:₦|\bN(?:GN)?\s?|\bnaira\s+)\s?(\d{1,3}(?:[,.\s]\d{3})*(?:\.\d{1,2})?|\d{2,7}(?:\.\d{1,2})?)",
+    rf"(?:₦|\bN(?:GN)?\s?|\bnaira\s+)\s?{_AMOUNT}"
+    rf"|{_AMOUNT}\s*(?:naira|ngn)\b",
     re.IGNORECASE,
 )
 _BVN_NIN = re.compile(r"\b\d{11}\b")
@@ -41,7 +56,9 @@ def _amounts(text: str) -> set[float]:
     """Extract numeric amounts from naira mentions, normalised."""
     out: set[float] = set()
     for m in _NGN_PRICE.finditer(text):
-        raw = m.group(1)
+        raw = next((g for g in m.groups() if g), None)
+        if not raw:
+            continue
         cleaned = re.sub(r"[,\s]", "", raw)
         try:
             out.add(float(cleaned))
@@ -73,12 +90,31 @@ class GuardResult:
 # ---------------------------------------------------------------------------
 
 
+def _price_fallback(lang: str, tenant_fallback: str) -> str:
+    if lang != "en":
+        return _PRICE_FALLBACK.get(lang) or tenant_fallback or _PRICE_FALLBACK["en"]
+    base = tenant_fallback or (
+        "I'm not sure about that one — let me get a human colleague to help."
+    )
+    extra = "I'd rather double-check the exact figure with my colleague."
+    if extra.lower() in base.lower():
+        return base
+    return f"{base.rstrip()} {extra}"
+
+
+def _drop_invented_price_sentences(text: str, invented: set[float]) -> str:
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept = [p for p in parts if not (_amounts(p) & invented)]
+    return " ".join(kept).strip()
+
+
 def apply_guards(
     response_text: str,
     *,
     retrieved_text_blob: str,
     tenant_config: TenantConfig,
     user_message: str,
+    detected_language: str = "en",
 ) -> GuardResult:
     """Run all guardrails over a candidate reply.
 
@@ -107,11 +143,11 @@ def apply_guards(
         invented = {a for a in reply_amounts if a not in known_amounts}
         if invented:
             invented_str = ", ".join(f"₦{int(a):,}" for a in sorted(invented))
+            kept = _drop_invented_price_sentences(text, invented)
+            confirm = _price_fallback(detected_language, tenant_config.fallback)
+            final = f"{kept} {confirm}".strip() if len(kept) >= 20 else confirm
             return GuardResult(
-                final_text=(
-                    f"{tenant_config.fallback} "
-                    "I'd rather double-check the exact figure with my colleague."
-                ),
+                final_text=final,
                 mutated=True,
                 escalated=True,
                 reason=f"hallucinated_price:{invented_str}",

@@ -226,6 +226,7 @@ class SMEOrchestrator:
             retrieved_text_blob=retrieved_blob,
             tenant_config=cfg,
             user_message=msg.text,
+            detected_language=lang_result.dominant,
         )
         latencies["guards_ms"] = (time.perf_counter() - t) * 1000
 

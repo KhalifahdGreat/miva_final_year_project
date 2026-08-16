@@ -193,11 +193,17 @@ _RETRIEVAL_GLOSS: dict[str, str] = {
     "sayar": "sell", "saye": "buy", "zuta": "buy", "ere": "sell",
     "amala": "amala", "ewedu": "ewedu soup", "iyan": "pounded yam",
     "nibo": "where location", "ebee": "where location", "ina": "where location",
-    "nigba": "when time", "oge": "time", "lokaci": "time",
+    "nigba": "when time", "oge": "time how long", "lokaci": "time",
     "pari": "ready finish", "tan": "finished sold out",
     "sii": "open", "budewa": "open", "emeghe": "open",
     "emechi": "close", "rufewa": "close", "isimi": "sunday",
     "gbe": "deliver bring", "kawo": "deliver bring",
+    "ofe": "soup", "ose": "pepper soup", "afang": "afang soup",
+    "kwadebe": "prepare ready time", "ibute": "delivery deliver",
+    "ogologo": "how long duration", "tupu": "before until",
+    "azu": "fish", "anu": "meat", "ugwu": "ugu pumpkin leaf",
+    "karama": "bottle drink", "itinye": "add extra",
+    "akwukwo": "vegetable leaf",
 }
 
 

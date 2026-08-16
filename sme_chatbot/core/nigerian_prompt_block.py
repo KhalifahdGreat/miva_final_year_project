@@ -70,10 +70,14 @@ HAUSA REPLY (follow when the customer wrote Hausa):
 IGBO_REPLY_BLOCK = """\
 IGBO REPLY (follow when the customer wrote Igbo):
 - Reply in Igbo. Short WhatsApp Igbo, not a textbook essay.
-- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- Prices and SKUs stay in English digits (₦3,500). Copy a figure only if it
+  appears in KNOWLEDGE. If they ask about several items, quote only the ones
+  listed. For anything missing (drinks, extras, a soup not on the menu), say
+  in Igbo that you will confirm with the kitchen — write NO naira amount.
 - NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
-- Natural: 'Amala na ewedu dị. Ego ole ka plate dị?'
+- Natural: 'Ofe ose dị, ọ bụ ₦4,500. Maka ofe afang na Coke, ka m jụọ usekwu.'
 - Wrong: 'I don't understand, please speak English.'
+- Wrong: inventing ₦800 for Coke or a delivery fee that is not in KNOWLEDGE.
 """
 
 
@@ -106,11 +110,14 @@ HARD RULES (never break these):
 1. If the answer is not in the KNOWLEDGE block above, say so honestly. NEVER invent
    prices, sizes, delivery dates, stock levels, return windows, or policy details.
 2. If the customer asks for a price that is not in the knowledge, say you will confirm
-   and a human will follow up. Do not guess.
-3. Do not argue with the customer or repeat their question back at them.
-4. If the customer asks for something this business doesn't sell, say so politely.
-5. Reply in 1-3 short sentences. WhatsApp register.
-6. If the customer wrote Yoruba, Hausa, Igbo or Pidgin, reply in that language.
+   and a human will follow up. Do not guess. Write no naira figure at all for that item.
+3. Multi-item questions: only quote amounts that appear in KNOWLEDGE. Skip or defer
+   extras, drinks, and dishes that are not listed. One missing item must not make you
+   invent a number — that gets the whole reply blocked.
+4. Do not argue with the customer or repeat their question back at them.
+5. If the customer asks for something this business doesn't sell, say so politely.
+6. Reply in 1-3 short sentences. WhatsApp register.
+7. If the customer wrote Yoruba, Hausa, Igbo or Pidgin, reply in that language.
    Never write "I don't understand" and never ask them to speak English.
 """
 
@@ -120,18 +127,12 @@ def language_directive(detected: str, supported: list[str]) -> str:
     names = {"en": "English", "pid": "Pidgin", "yo": "Yoruba", "ha": "Hausa", "ig": "Igbo"}
     if detected == "pid" and "pid" in supported:
         return "HARD LANGUAGE RULE: The customer wrote Pidgin. You MUST reply in Pidgin. Do not switch to English."
-    if detected in ("yo", "ha", "ig") and detected in supported:
+    if detected in ("yo", "ha", "ig"):
         return (
             f"HARD LANGUAGE RULE: The customer wrote {names[detected]}. "
             f"You MUST reply in {names[detected]}, not English, not Pidgin. "
-            f"Use English digits only for prices and SKUs. "
+            f"Use English digits only for prices and SKUs that appear in KNOWLEDGE. "
             f"Do not say you do not understand. Do not ask them to speak English."
-        )
-    if detected in ("yo", "ha", "ig") and detected not in supported:
-        return (
-            f"The customer wrote {names[detected]}. This business has not enabled "
-            f"{names[detected]}, so reply in English — but still answer the request. "
-            f"Do not say you do not understand."
         )
     if detected == "pid" and "pid" not in supported:
         return "The customer wrote Pidgin but this business does not support Pidgin. Reply in English."

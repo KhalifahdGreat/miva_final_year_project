@@ -28,6 +28,40 @@ def test_invented_price_is_blocked():
     )
     assert out.escalated is True
     assert "hallucinated_price" in (out.reason or "")
+    assert "double-check" in out.final_text
+
+
+def test_invented_price_keeps_igbo_and_localizes_fallback():
+    cfg = _cfg()
+    out = apply_guards(
+        "Ofe ose dị, ọ bụ ₦4,500. Coke bụ ₦800.",
+        retrieved_text_blob="Catfish pepper soup costs 4500 naira.",
+        tenant_config=cfg,
+        user_message="Ego ole ka ofe ose na Coke bu?",
+        detected_language="ig",
+    )
+    assert out.escalated is True
+    assert "4,500" in out.final_text or "4500" in out.final_text
+    assert "800" not in out.final_text
+    assert "usekwu" in out.final_text
+    assert "I'm not sure" not in out.final_text
+
+
+def test_kb_plain_naira_allows_naira_sign_in_reply():
+    cfg = _cfg()
+    out = apply_guards(
+        "Ofe ose dị ₦4,500. Delivery mainland bụ ₦1,000.",
+        retrieved_text_blob=(
+            "Catfish pepper soup costs 4500 naira. "
+            "Delivery within Lagos mainland costs 1000 naira."
+        ),
+        tenant_config=cfg,
+        user_message="Ego ole ka ofe ose bu?",
+        detected_language="ig",
+    )
+    assert out.escalated is False
+    assert "4,500" in out.final_text
+    assert "1,000" in out.final_text
 
 
 def test_phone_redacted():
