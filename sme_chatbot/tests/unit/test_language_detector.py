@@ -68,3 +68,55 @@ def test_igbo_price_question_not_pidgin():
 def test_igbo_where_are_you():
     r = detect("Ebee ka unu di?")
     assert r.dominant == "ig"
+
+
+def test_tone_marked_yoruba_order():
+    r = detect("Mo fẹ́ paṣẹ àmàlà àti ewédú; mélòó ni iye owó?")
+    assert r.dominant == "yo"
+
+
+def test_english_naming_dishes_stays_english():
+    r = detect("How much is amala and ewedu with goat meat delivery to Mushin?")
+    assert r.dominant == "en"
+
+
+def test_igbo_hyphen_verbs_not_pidgin():
+    r = detect("Kedu oge unu na-emeghe na nke unu na-emechi?")
+    assert r.dominant == "ig"
+
+
+def test_pidgin_how_much_be():
+    r = detect("How much be jollof rice with chicken?")
+    assert r.dominant == "pid"
+
+
+def test_pidgin_how_i_go_take():
+    r = detect("How I go take order food?")
+    assert r.dominant == "pid"
+
+
+def test_english_i_go_to_place_stays_english():
+    r = detect("I go to the shop on Sunday for delivery.")
+    assert r.dominant == "en"
+
+
+def test_english_take_order_stays_english():
+    r = detect("Can I take this order for delivery to the island?")
+    assert r.dominant == "en"
+
+
+def test_single_word_greetings():
+    assert detect("Bawo").dominant == "yo"
+    assert detect("Kedu?").dominant == "ig"
+    assert detect("Sannu").dominant == "ha"
+    assert detect("Abeg").dominant == "pid"
+
+
+def test_all_caps_pidgin():
+    r = detect("ABEG UNA DEY OPEN TODAY?")
+    assert r.dominant == "pid"
+
+
+def test_code_switch_yoruba_then_pidgin_stays_yoruba():
+    r = detect("Mo fe ra amala abeg")
+    assert r.dominant == "yo"
