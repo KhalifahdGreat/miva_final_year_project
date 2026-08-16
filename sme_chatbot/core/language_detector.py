@@ -81,14 +81,13 @@ YORUBA_TOKENS: frozenset[str] = frozenset(
         "ore", "ola", "egbon", "aburo", "iya", "baba", "omoluabi", "omolabi",
         # High-frequency Yoruba verbs (commerce + everyday)
         "fe", "fẹ", "ra", "ta", "so", "bo", "je", "jẹ",
-        "gba", "fun", "ko", "kọ", "se", "ṣe", "ri", "ba", "wo",
+        "gba", "fun", "ko", "kọ", "se", "ṣe", "ri", "wo",
         "sii", "nsii", "tii", "pari", "tan", "gbe", "ran",
-        # Commerce / food / time — the words customers actually type
-        "elo", "adie", "pelu", "ati", "iyan", "obe", "amala", "ewedu",
-        "gbegiri", "igba", "nibo", "ojo", "isimi", "foonu", "oju", "loni",
+        # Commerce / time — dish names are NOT language IDs (they appear in HA/IG too)
+        "elo", "pelu", "ati", "igba", "nibo", "ojo", "isimi", "foonu", "oju", "loni",
         "nigba", "ma", "pele", "dupe", "odun", "owuro", "ale", "osan",
-        "ounje", "onje", "owo", "owo", "sowo", "tita", "rira",
-        "se", "nko", "boya", "rara", "padi",
+        "ounje", "onje", "sowo", "tita", "rira",
+        "nko", "boya", "rara", "padi",
     }
 )
 
@@ -102,8 +101,11 @@ HAUSA_TOKENS: frozenset[str] = frozenset(
         # Commerce / time / food — eval + live chat
         "nawa", "kaza", "da", "miyar", "lokaci", "kuke", "budewa", "rufewa",
         "cikin", "sayar", "saye", "wurin", "ajiye", "motoci", "kuma",
-        "yaushe", "nawa", "farashi", "kudi", "kayan", "abinci",
+        "yaushe", "nawa", "farashi", "farashin", "kudi", "kayan", "abinci",
         "bude", "rufe", "zuwa", "daga", "akwai", "babu",
+        "zan", "yau", "sai", "dai", "tukuna", "sannan", "tabbatar",
+        "hakan", "kawo", "biya", "tasha", "tashar", "mota", "motar",
+        "baya", "sanar", "maka",
     }
 )
 
@@ -115,7 +117,7 @@ IGBO_TOKENS: frozenset[str] = frozenset(
         "ndi", "mba", "ee", "eziokwu", "okwukwo", "ahia",
         "ezigbo",
         # Commerce / time / food — eval + live chat
-        "ole", "okuko", "bu", "ofe", "oge", "ebee", "di", "nwere",
+        "ole", "bu", "oge", "ebee", "di", "nwere",
         "ebe", "ugbo", "ala", "zuta", "zụta", "re", "ere",
         "emeghe", "emechi", "edozi", "gote", "azụta", "azuta",
         "mgbe", "kedu", "biko", "nri", "ofe", "ji", "akpu",
@@ -264,7 +266,10 @@ def detect(text: str) -> LangResult:
     if "nawa" in bag and ha_hits >= 2:
         scores["ha"] = max(scores["ha"], scores.get("pid", 0.0) + 0.15, 0.60)
 
-    dominant = max(scores, key=lambda k: scores[k])
+    # Tie-break on raw lexicon hits so dish-name collisions cannot beat
+    # a sentence that is clearly Hausa/Igbo/Yoruba by function words.
+    raw = {"yo": yo_hits, "ha": ha_hits, "ig": ig_hits, "pid": pid_total, "en": english_count}
+    dominant = max(scores, key=lambda k: (scores[k], raw.get(k, 0)))
 
     ordered = sorted(scores.values(), reverse=True)
     second = ordered[1] if len(ordered) > 1 else 0.0

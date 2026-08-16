@@ -51,6 +51,15 @@ def test_hausa_price_question():
     assert r.dominant == "ha"
 
 
+def test_hausa_not_yoruba_when_dishes_are_named():
+    # Live playground miss: Hausa sentence naming amala/ewedu was labelled Yoruba.
+    r = detect(
+        "Akwai Amala da Ewedu; farashin ya kai Naira 3,000. "
+        "Sai dai, ban san nawa za a biya don kawo shi Tashar Motar Mushin ba tukuna."
+    )
+    assert r.dominant == "ha"
+
+
 def test_igbo_price_question_not_pidgin():
     r = detect("Ego ole ka jollof rice na okuko bu?")
     assert r.dominant == "ig"
