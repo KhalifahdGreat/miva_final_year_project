@@ -49,25 +49,54 @@ SOUND REAL — NOT TRANSLATED:
 """
 
 
+YORUBA_REPLY_BLOCK = """\
+YORUBA REPLY (follow when the customer wrote Yoruba):
+- Reply in Yoruba. Short WhatsApp Yoruba, not a textbook essay.
+- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
+- Natural: 'Amala ati ewedu wa. Elo ni plate? Mo le ran yin lowo.'
+- Wrong: 'I don't understand, please speak English.'
+"""
+
+HAUSA_REPLY_BLOCK = """\
+HAUSA REPLY (follow when the customer wrote Hausa):
+- Reply in Hausa. Short WhatsApp Hausa, not a textbook essay.
+- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
+- Natural: 'Amala da ewedu na nan. Nawa ne farashin plate?'
+- Wrong: 'I don't understand, please speak English.'
+"""
+
+IGBO_REPLY_BLOCK = """\
+IGBO REPLY (follow when the customer wrote Igbo):
+- Reply in Igbo. Short WhatsApp Igbo, not a textbook essay.
+- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
+- Natural: 'Amala na ewedu dị. Ego ole ka plate dị?'
+- Wrong: 'I don't understand, please speak English.'
+"""
+
+
 # Per-tone customer-service "voice" — these are injected by prompt_builder.
+# Tone must NEVER override the language directive. English is only the
+# default when the customer actually wrote English.
 TONE_INSTRUCTIONS: dict[str, str] = {
     "formal": (
-        "Reply in clear, polite English. Use full sentences. "
-        "Use 'sir' or 'ma' only if the customer used a formal register first. "
-        "Avoid slang."
+        "Be clear and polite. Use full sentences in whatever language the "
+        "customer used. Use 'sir' or 'ma' only if they used a formal register first."
     ),
     "casual": (
-        "Reply in friendly conversational English. Light contractions are fine. "
-        "Avoid slang the customer did not use first."
+        "Be friendly and short. Mirror the customer's language. "
+        "Light contractions are fine. Do not switch them to English."
     ),
     "pidgin_friendly": (
-        "If the customer wrote Pidgin, reply in Pidgin. "
-        "If they wrote English, reply in English with a warm Nigerian register. "
-        "NEVER translate yourself or repeat the same message in two languages."
+        "Mirror the customer's language exactly: Pidgin → Pidgin, Yoruba → Yoruba, "
+        "Hausa → Hausa, Igbo → Igbo, English → warm Nigerian English. "
+        "NEVER ask them to switch language. NEVER translate yourself."
     ),
     "youthful": (
-        "Match a Gen-Z Nigerian register. Light emoji ok if the customer used one first. "
-        "Stay short and lively."
+        "Match a Gen-Z Nigerian register in the customer's language. "
+        "Light emoji ok if the customer used one first. Stay short and lively."
     ),
 }
 
@@ -81,19 +110,29 @@ HARD RULES (never break these):
 3. Do not argue with the customer or repeat their question back at them.
 4. If the customer asks for something this business doesn't sell, say so politely.
 5. Reply in 1-3 short sentences. WhatsApp register.
+6. If the customer wrote Yoruba, Hausa, Igbo or Pidgin, reply in that language.
+   Never write "I don't understand" and never ask them to speak English.
 """
 
 
 def language_directive(detected: str, supported: list[str]) -> str:
-    """Return a one-line directive for the prompt builder."""
+    """Return a hard language instruction for the prompt builder."""
     names = {"en": "English", "pid": "Pidgin", "yo": "Yoruba", "ha": "Hausa", "ig": "Igbo"}
     if detected == "pid" and "pid" in supported:
-        return "The customer wrote Pidgin. Reply in Pidgin."
+        return "HARD LANGUAGE RULE: The customer wrote Pidgin. You MUST reply in Pidgin. Do not switch to English."
     if detected in ("yo", "ha", "ig") and detected in supported:
         return (
-            f"The customer wrote {names[detected]}. "
-            f"Reply briefly in {names[detected]}; use English only for prices and SKUs."
+            f"HARD LANGUAGE RULE: The customer wrote {names[detected]}. "
+            f"You MUST reply in {names[detected]}, not English, not Pidgin. "
+            f"Use English digits only for prices and SKUs. "
+            f"Do not say you do not understand. Do not ask them to speak English."
+        )
+    if detected in ("yo", "ha", "ig") and detected not in supported:
+        return (
+            f"The customer wrote {names[detected]}. This business has not enabled "
+            f"{names[detected]}, so reply in English — but still answer the request. "
+            f"Do not say you do not understand."
         )
     if detected == "pid" and "pid" not in supported:
         return "The customer wrote Pidgin but this business does not support Pidgin. Reply in English."
-    return "Reply in English."
+    return "The customer wrote English. Reply in English."

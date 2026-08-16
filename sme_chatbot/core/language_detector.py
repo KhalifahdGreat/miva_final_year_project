@@ -15,6 +15,7 @@ a single utterance (code-switching).
 Public API:
 
     detect(text: str) -> LangResult
+    expand_query_for_retrieval(text: str) -> str
 
 It deliberately has **no external dependencies** so it runs at micro-second
 latency on a laptop and is trivially unit-testable.
@@ -40,42 +41,54 @@ PIDGIN_TOKENS: frozenset[str] = frozenset(
         "abeg", "wahala", "wetin", "dey", "una", "sef", "sha", "wey", "abi",
         "biko", "omo", "ehn", "walahi", "oga", "dem", "shey", "japa", "mumu",
         "sabi", "comot", "ginger", "chai", "nawa", "abasi", "naso", "shebi",
-        "kuku", "pikin", "shey", "abeg", "yawa", "wahala", "shakara",
-        "wahala", "kpekus", "scope", "shege", "ginger", "shey",
+        "kuku", "pikin", "yawa", "shakara", "kpekus", "shege",
     }
 )
 
-# Multi-word Pidgin discourse markers (regex patterns).
+# Multi-word Pidgin discourse markers.
+# Bare "na <word>" is NOT included: Igbo uses "na" as a high-frequency
+# particle ("and / that / at") and that pattern was flipping Igbo → Pidgin.
 PIDGIN_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bno\s+be\b", re.IGNORECASE),         # "no be lie"
-    re.compile(r"\bna\s+\w+", re.IGNORECASE),          # "na me sabi"
-    re.compile(r"\be\s+dey\b", re.IGNORECASE),         # "e dey go"
-    re.compile(r"\bdey\s+\w+", re.IGNORECASE),         # "dey come"
-    re.compile(r"\bi\s+go\s+\w+", re.IGNORECASE),      # "I go do am"
-    re.compile(r"\bno\s+fit\b", re.IGNORECASE),        # "no fit"
-    re.compile(r"\bdon\s+\w+", re.IGNORECASE),         # "don finish", "don tire"
-    re.compile(r"\bmake\s+i\b", re.IGNORECASE),        # "make i go"
-    re.compile(r"\bsmall\s+small\b", re.IGNORECASE),   # "small small"
-    re.compile(r"\bwetin\s+dey\b", re.IGNORECASE),     # "wetin dey happen"
-    re.compile(r"\bfor\s+ground\b", re.IGNORECASE),    # "I dey for ground"
+    re.compile(r"\bno\s+be\b", re.IGNORECASE),
+    re.compile(r"\bna\s+(me|so|him|am|wetin|true|lie|dat|dis|the)\b", re.IGNORECASE),
+    re.compile(r"\be\s+dey\b", re.IGNORECASE),
+    re.compile(r"\bdey\s+\w+", re.IGNORECASE),
+    re.compile(r"\bi\s+go\s+\w+", re.IGNORECASE),
+    re.compile(r"\bno\s+fit\b", re.IGNORECASE),
+    re.compile(r"\bdon\s+\w+", re.IGNORECASE),
+    re.compile(r"\bmake\s+i\b", re.IGNORECASE),
+    re.compile(r"\bsmall\s+small\b", re.IGNORECASE),
+    re.compile(r"\bwetin\s+dey\b", re.IGNORECASE),
+    re.compile(r"\bwetin\s+be\b", re.IGNORECASE),
+    re.compile(r"\bi\s+fit\b", re.IGNORECASE),
+    re.compile(r"\bfor\s+ground\b", re.IGNORECASE),
+    re.compile(r"\bhow\s+much\s+be\b", re.IGNORECASE),
 ]
+
+# One of these alone is enough to claim Pidgin (they almost never appear in EN/YO/HA/IG).
+_PIDGIN_ANCHORS = frozenset({"una", "wetin", "abeg", "dey", "wahala", "sabi", "comot", "pikin"})
 
 YORUBA_TOKENS: frozenset[str] = frozenset(
     {
         # Greetings + courtesy
         "bawo", "ekaaro", "ekaasan", "ekuirole", "ekaale", "eshe", "ese",
-        "kaaro", "jowo", "joo", "abeg",
+        "kaaro", "jowo", "joo",
         # Pronouns + frequent function words
         "mo", "mi", "re", "wa", "yin", "won", "awon", "iwo", "emi",
         "ti", "ni", "yi", "yen", "naa", "lo", "lori",
         # Frequent content words
         "owo", "asiri", "ile", "oluwa", "kilode", "omode", "iyawo", "oko",
         "ore", "ola", "egbon", "aburo", "iya", "baba", "omoluabi", "omolabi",
-        # High-frequency Yoruba verbs (often used in mixed-language commerce chats)
-        "fe", "fẹ", "ra", "ta", "lo", "so", "bo", "wa", "je", "jẹ",
+        # High-frequency Yoruba verbs (commerce + everyday)
+        "fe", "fẹ", "ra", "ta", "so", "bo", "je", "jẹ",
         "gba", "fun", "ko", "kọ", "se", "ṣe", "ri", "ba", "wo",
-        # Anchors that survive ASCII conversion
-        "se", "nko", "abi", "boya", "ka", "rara", "padi",
+        "sii", "nsii", "tii", "pari", "tan", "gbe", "ran",
+        # Commerce / food / time — the words customers actually type
+        "elo", "adie", "pelu", "ati", "iyan", "obe", "amala", "ewedu",
+        "gbegiri", "igba", "nibo", "ojo", "isimi", "foonu", "oju", "loni",
+        "nigba", "ma", "pele", "dupe", "odun", "owuro", "ale", "osan",
+        "ounje", "onje", "owo", "owo", "sowo", "tita", "rira",
+        "se", "nko", "boya", "rara", "padi",
     }
 )
 
@@ -86,25 +99,78 @@ HAUSA_TOKENS: frozenset[str] = frozenset(
         "mu", "ku", "su", "wani", "wanda", "ban", "kasa", "yara", "abinci",
         "ruwa", "gida", "uba", "uwa", "yaro", "yarinya", "malam", "barka",
         "nagode", "tafiya", "shawara",
+        # Commerce / time / food — eval + live chat
+        "nawa", "kaza", "da", "miyar", "lokaci", "kuke", "budewa", "rufewa",
+        "cikin", "sayar", "saye", "wurin", "ajiye", "motoci", "kuma",
+        "yaushe", "nawa", "farashi", "kudi", "kayan", "abinci",
+        "bude", "rufe", "zuwa", "daga", "akwai", "babu",
     }
 )
 
 IGBO_TOKENS: frozenset[str] = frozenset(
     {
         "kedu", "ndewo", "biko", "ego", "ulo", "nna", "nne", "obi",
-        "anyi", "unu", "ha", "gi", "ya", "m", "mu", "nke", "n'ihi",
-        "ihe", "nwa", "nwoke", "nwanyi", "agwa", "ego", "iri", "ngwa",
-        "ngwa-ngwa", "ndi", "mba", "ee", "eziokwu", "okwukwo", "ahia",
-        "ezigbo", "ego", "nne", "nna",
+        "anyi", "unu", "ha", "gi", "ya", "m", "nke", "ihe",
+        "nwa", "nwoke", "nwanyi", "agwa", "iri", "ngwa",
+        "ndi", "mba", "ee", "eziokwu", "okwukwo", "ahia",
+        "ezigbo",
+        # Commerce / time / food — eval + live chat
+        "ole", "okuko", "bu", "ofe", "oge", "ebee", "di", "nwere",
+        "ebe", "ugbo", "ala", "zuta", "zụta", "re", "ere",
+        "emeghe", "emechi", "edozi", "gote", "azụta", "azuta",
+        "mgbe", "kedu", "biko", "nri", "ofe", "ji", "akpu",
+        "gịnị", "gini", "olee", "ego", "ahịa", "ahia",
     }
 )
 
 # Words to actively exclude when present alongside Pidgin tokens — these are
 # extremely common in English and would otherwise drag the detector toward EN.
-# We do NOT count them as Pidgin; we just don't let them suppress Pidgin.
 _ENGLISH_NOISE = frozenset(
     {"the", "a", "an", "is", "are", "was", "were", "and", "or", "but"}
 )
+
+# English glosses appended to the retrieval query so MiniLM can match an
+# English knowledge base when the customer wrote yo / ha / ig.
+_RETRIEVAL_GLOSS: dict[str, str] = {
+    "elo": "how much price",
+    "nawa": "how much price",
+    "ole": "how much price",
+    "ego": "price money",
+    "ra": "buy",
+    "fe": "want",
+    "fẹ": "want",
+    "ta": "sell",
+    "sayar": "sell",
+    "saye": "buy",
+    "zuta": "buy",
+    "ere": "sell",
+    "adie": "chicken",
+    "okuko": "chicken",
+    "kaza": "chicken",
+    "amala": "amala",
+    "ewedu": "ewedu soup",
+    "iyan": "pounded yam",
+    "obe": "soup",
+    "ofe": "soup",
+    "gbegiri": "gbegiri soup",
+    "nibo": "where location",
+    "ebee": "where location",
+    "ina": "where location",
+    "nigba": "when time",
+    "igba": "when time",
+    "oge": "time",
+    "lokaci": "time",
+    "pari": "ready finish",
+    "tan": "finished sold out",
+    "sii": "open",
+    "nsii": "open",
+    "budewa": "open",
+    "emeghe": "open",
+    "emechi": "close",
+    "rufewa": "close",
+    "isimi": "sunday",
+    "foonu": "phone",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -130,27 +196,20 @@ _TOKEN_RE = re.compile(r"\b[\w']+\b")
 
 
 def _bag(text: str) -> list[str]:
-    return _TOKEN_RE.findall(text.lower())
+    # Split hyphenated Igbo verbs (na-emeghe, na-ere) so stems are countable.
+    normalised = text.lower().replace("-", " ")
+    return _TOKEN_RE.findall(normalised)
+
+
+def _promote(scores: dict[str, float], lang: str, hits: int, n: int) -> None:
+    """Lift an indigenous language over the English residual when signal is real."""
+    density = hits / max(1, n)
+    if hits >= 2 or (hits >= 1 and density >= 0.20):
+        scores[lang] = max(scores[lang], scores.get("en", 0.0) + 0.12, 0.55)
 
 
 def detect(text: str) -> LangResult:
-    """Detect the dominant language and mixed-language flag.
-
-    Algorithm:
-        1. Tokenise + lowercase.
-        2. Count high-precision tokens per language lexicon.
-        3. Count Pidgin discourse-marker patterns (regex).
-        4. Normalise scores by token count of the message.
-        5. If Pidgin score exceeds an absolute floor AND a relative ratio
-           against English noise, promote it to dominant.
-        6. Otherwise pick the highest-scoring non-noise language; if nothing
-           scores, fall back to "en".
-        7. Compute the mixed flag: second-best score ≥ 50% of the best.
-
-    Returns
-    -------
-    LangResult
-    """
+    """Detect the dominant language and mixed-language flag."""
     if not text or not text.strip():
         return LangResult("unknown", False, {})
 
@@ -177,9 +236,6 @@ def detect(text: str) -> LangResult:
         "ig":  ig_hits   / n,
     }
 
-    # English baseline: fraction of tokens that are NOT in any other lexicon
-    # AND are not English-noise words. This deliberately under-weights
-    # short courtesy fillers.
     other = PIDGIN_TOKENS | YORUBA_TOKENS | HAUSA_TOKENS | IGBO_TOKENS
     english_count = sum(
         1
@@ -188,31 +244,28 @@ def detect(text: str) -> LangResult:
     )
     scores["en"] = english_count / n
 
-    # Pidgin promotion rule.
-    #
-    # Off-the-shelf langid mislabels Pidgin as English because the lexical
-    # overlap is large (most function words ARE English). To counter that we
-    # promote Pidgin to the dominant slot if any of the following hold:
-    #
-    #   (a) >= 2 Pidgin signals (tokens + patterns combined),
-    #   (b) Pidgin density >= 8% AND at least one multi-word Pidgin pattern,
-    #   (c) the message contains a Pidgin discourse-marker pattern *and*
-    #       at least one Pidgin token (e.g. "wetin dey ... abeg").
-    #
-    # Promotion sets pid above the English baseline rather than to a fixed
-    # constant; this preserves relative ordering when an utterance contains
-    # genuine Yoruba/Hausa/Igbo content too.
     strong_pidgin = (
         pid_total >= 2
         or (scores["pid"] >= 0.08 and pid_pattern_hits >= 1)
         or (pid_pattern_hits >= 1 and pid_token_hits >= 1)
+        or bool(bag & _PIDGIN_ANCHORS)
     )
-    if strong_pidgin:
+    # Do not promote Pidgin when an indigenous language already has a
+    # clearer lexical claim (stops Igbo "na" leftovers and Hausa "nawa").
+    indigenous_lead = max(yo_hits, ha_hits, ig_hits)
+    if strong_pidgin and indigenous_lead < 2:
         scores["pid"] = max(scores["pid"], scores["en"] + 0.10, 0.55)
+
+    _promote(scores, "yo", yo_hits, n)
+    _promote(scores, "ha", ha_hits, n)
+    _promote(scores, "ig", ig_hits, n)
+
+    # Hausa "nawa ne …" is a price question, not Pidgin "nawa" (trouble).
+    if "nawa" in bag and ha_hits >= 2:
+        scores["ha"] = max(scores["ha"], scores.get("pid", 0.0) + 0.15, 0.60)
 
     dominant = max(scores, key=lambda k: scores[k])
 
-    # Mixed flag
     ordered = sorted(scores.values(), reverse=True)
     second = ordered[1] if len(ordered) > 1 else 0.0
     best = ordered[0] or 1e-6
@@ -225,6 +278,20 @@ def detect(text: str) -> LangResult:
         pidgin_hits=pid_token_hits,
         pattern_hits=pid_pattern_hits,
     )
+
+
+def expand_query_for_retrieval(text: str) -> str:
+    """Append English glosses so RAG can hit an English knowledge base."""
+    extras: list[str] = []
+    seen: set[str] = set()
+    for tok in _bag(text):
+        gloss = _RETRIEVAL_GLOSS.get(tok)
+        if gloss and gloss not in seen:
+            extras.append(gloss)
+            seen.add(gloss)
+    if not extras:
+        return text
+    return f"{text} {' '.join(extras)}"
 
 
 # ---------------------------------------------------------------------------

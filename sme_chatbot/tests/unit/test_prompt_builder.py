@@ -20,6 +20,37 @@ def test_pidgin_path_includes_grammar_block():
     assert "abeg how much" in user_prompt
 
 
+def test_yoruba_path_includes_reply_block_and_hard_rule():
+    cfg = default_config("tid", "Mama Put Kitchen")
+    cfg.languages = ["en", "pid", "yo", "ha", "ig"]
+    sys_prompt, _ = build(
+        tenant_config=cfg,
+        retrieved_chunks=[],
+        history=[],
+        user_message="mo fe ra ewedu ati amala",
+        detected_language="yo",
+    )
+    assert "YORUBA REPLY" in sys_prompt
+    assert "HARD LANGUAGE RULE" in sys_prompt
+    assert "Yoruba" in sys_prompt
+    assert "PIDGIN GRAMMAR" not in sys_prompt
+
+
+def test_hausa_and_igbo_paths_include_reply_blocks():
+    cfg = default_config("tid", "Mama Put Kitchen")
+    cfg.languages = ["en", "pid", "yo", "ha", "ig"]
+    ha, _ = build(
+        tenant_config=cfg, retrieved_chunks=[], history=[],
+        user_message="Nawa ne jollof?", detected_language="ha",
+    )
+    ig, _ = build(
+        tenant_config=cfg, retrieved_chunks=[], history=[],
+        user_message="Ego ole ka jollof bu?", detected_language="ig",
+    )
+    assert "HAUSA REPLY" in ha
+    assert "IGBO REPLY" in ig
+
+
 def test_english_path_omits_pidgin_block():
     cfg = default_config("tid", "Acme")
     hits = []

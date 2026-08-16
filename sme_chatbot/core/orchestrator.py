@@ -195,9 +195,10 @@ class SMEOrchestrator:
         lang_result = language_detector.detect(msg.text)
         latencies["lang_ms"] = (time.perf_counter() - t) * 1000
 
-        # 4. RAG
+        # 4. RAG — expand yo/ha/ig queries so MiniLM can hit an English KB
         t = time.perf_counter()
-        hits = self._retrieve(msg.tenant_id, msg.text, cfg)
+        retrieval_query = language_detector.expand_query_for_retrieval(msg.text)
+        hits = self._retrieve(msg.tenant_id, retrieval_query, cfg)
         latencies["retrieval_ms"] = (time.perf_counter() - t) * 1000
 
         # 5. prompt build

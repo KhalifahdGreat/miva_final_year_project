@@ -34,3 +34,28 @@ def test_mixed_english_pidgin_flag():
     assert r.dominant in ("pid", "en")
     # at least one Pidgin signal recorded
     assert r.scores["pid"] > 0
+
+
+def test_yoruba_buy_intent_not_english():
+    r = detect("mo fe ra ewedu ati amala")
+    assert r.dominant == "yo"
+
+
+def test_yoruba_when_ready_not_english():
+    r = detect("Nigba wo ni o ma pari")
+    assert r.dominant == "yo"
+
+
+def test_hausa_price_question():
+    r = detect("Nawa ne jollof rice da kaza?")
+    assert r.dominant == "ha"
+
+
+def test_igbo_price_question_not_pidgin():
+    r = detect("Ego ole ka jollof rice na okuko bu?")
+    assert r.dominant == "ig"
+
+
+def test_igbo_where_are_you():
+    r = detect("Ebee ka unu di?")
+    assert r.dominant == "ig"

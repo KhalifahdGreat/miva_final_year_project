@@ -131,7 +131,7 @@ def default_config(tenant_id: str, business_name: str) -> TenantConfig:
         business_name=business_name,
         tagline="",
         tone="casual",
-        languages=["en", "pid"],
+        languages=["en", "pid", "yo", "ha", "ig"],
         timezone="Africa/Lagos",
         operating_hours={
             "mon_fri": "09:00-19:00",

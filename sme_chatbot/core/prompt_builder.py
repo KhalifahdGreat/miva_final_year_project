@@ -14,9 +14,12 @@ from __future__ import annotations
 
 from .nigerian_prompt_block import (
     HARD_RULES,
+    HAUSA_REPLY_BLOCK,
+    IGBO_REPLY_BLOCK,
     NIGERIAN_FLUENCY_BLOCK,
     PIDGIN_GRAMMAR_BLOCK,
     TONE_INSTRUCTIONS,
+    YORUBA_REPLY_BLOCK,
     language_directive,
 )
 from .types import Hit, TenantConfig, Turn
@@ -92,25 +95,31 @@ def build(
 
     knowledge = _format_knowledge(retrieved_chunks)
     brand_voice = _format_brand_voice(tenant_config.brand_voice_examples)
-    pidgin_block = PIDGIN_GRAMMAR_BLOCK if detected_language == "pid" else ""
+    lang_block = {
+        "pid": PIDGIN_GRAMMAR_BLOCK,
+        "yo": YORUBA_REPLY_BLOCK,
+        "ha": HAUSA_REPLY_BLOCK,
+        "ig": IGBO_REPLY_BLOCK,
+    }.get(detected_language, "")
 
     biz_name = tenant_config.business_name
     tagline = tenant_config.tagline.strip()
 
+    # Language directive comes first so tone cannot force English.
     system_parts = [
         f"You are {biz_name}'s customer-service assistant on WhatsApp."
         + (f" {tagline}" if tagline else ""),
         "",
-        tone_block,
-        "",
         lang_directive,
+        "",
+        tone_block,
         "",
         NIGERIAN_FLUENCY_BLOCK,
         "",
         "USE THIS KNOWLEDGE ONLY (do not invent facts beyond it):",
         knowledge,
         brand_voice,
-        pidgin_block,
+        lang_block,
         HARD_RULES,
     ]
 
