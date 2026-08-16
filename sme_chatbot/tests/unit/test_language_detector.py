@@ -21,7 +21,7 @@ def test_pidgin_discourse_marker_alone():
 def test_yoruba_greeting():
     r = detect("Ekaaro, mo fẹ ra jollof")
     # Pidgin should NOT win this one
-    assert r.dominant in ("yo", "pid")  # tolerate either, but never plain en
+    assert r.dominant == "yo"
 
 
 def test_empty_string():

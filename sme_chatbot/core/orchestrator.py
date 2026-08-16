@@ -197,7 +197,9 @@ class SMEOrchestrator:
 
         # 4. RAG — expand yo/ha/ig queries so MiniLM can hit an English KB
         t = time.perf_counter()
-        retrieval_query = language_detector.expand_query_for_retrieval(msg.text)
+        retrieval_query = language_detector.expand_query_for_retrieval(
+            msg.text, lang_result.dominant,
+        )
         hits = self._retrieve(msg.tenant_id, retrieval_query, cfg)
         latencies["retrieval_ms"] = (time.perf_counter() - t) * 1000
 

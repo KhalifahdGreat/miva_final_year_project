@@ -52,18 +52,22 @@ SOUND REAL — NOT TRANSLATED:
 YORUBA_REPLY_BLOCK = """\
 YORUBA REPLY (follow when the customer wrote Yoruba):
 - Reply in Yoruba. Short WhatsApp Yoruba, not a textbook essay.
-- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- Copy a Naira figure only if it appears in KNOWLEDGE. Multi-item questions:
+  quote listed dishes only. For extras/drinks/missing soups, say you will
+  confirm — write NO naira amount for those.
 - NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
-- Natural: 'Amala ati ewedu wa. Elo ni plate? Mo le ran yin lowo.'
+- Natural: 'Amala ati ewedu wa, ₦3,000. Fun Coke, je ki n beere lowo kitchen.'
 - Wrong: 'I don't understand, please speak English.'
 """
 
 HAUSA_REPLY_BLOCK = """\
 HAUSA REPLY (follow when the customer wrote Hausa):
 - Reply in Hausa. Short WhatsApp Hausa, not a textbook essay.
-- Prices and SKUs stay in English digits (₦3,500). Do not invent a price.
+- Copy a Naira figure only if it appears in KNOWLEDGE. Multi-item questions:
+  quote listed dishes only. For extras/drinks/missing soups, say you will
+  confirm — write NO naira amount for those.
 - NEVER say you do not understand. NEVER ask them to speak English or Pidgin.
-- Natural: 'Amala da ewedu na nan. Nawa ne farashin plate?'
+- Natural: 'Amala da ewedu na nan, ₦3,000. Don Coke, bari in tambayi kitchen.'
 - Wrong: 'I don't understand, please speak English.'
 """
 
@@ -122,11 +126,15 @@ HARD RULES (never break these):
 """
 
 
-def language_directive(detected: str, supported: list[str]) -> str:
+def language_directive(detected: str, supported: list[str] | None = None) -> str:
     """Return a hard language instruction for the prompt builder."""
+    _ = supported
     names = {"en": "English", "pid": "Pidgin", "yo": "Yoruba", "ha": "Hausa", "ig": "Igbo"}
-    if detected == "pid" and "pid" in supported:
-        return "HARD LANGUAGE RULE: The customer wrote Pidgin. You MUST reply in Pidgin. Do not switch to English."
+    if detected == "pid":
+        return (
+            "HARD LANGUAGE RULE: The customer wrote Pidgin. You MUST reply in Pidgin. "
+            "Do not switch to English. Copy a Naira figure only if it appears in KNOWLEDGE."
+        )
     if detected in ("yo", "ha", "ig"):
         return (
             f"HARD LANGUAGE RULE: The customer wrote {names[detected]}. "
@@ -134,6 +142,6 @@ def language_directive(detected: str, supported: list[str]) -> str:
             f"Use English digits only for prices and SKUs that appear in KNOWLEDGE. "
             f"Do not say you do not understand. Do not ask them to speak English."
         )
-    if detected == "pid" and "pid" not in supported:
-        return "The customer wrote Pidgin but this business does not support Pidgin. Reply in English."
+    if detected == "unknown":
+        return "The message language is unclear. Reply in short Nigerian English."
     return "The customer wrote English. Reply in English."

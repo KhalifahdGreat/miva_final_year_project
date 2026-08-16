@@ -51,6 +51,18 @@ def test_hausa_and_igbo_paths_include_reply_blocks():
     assert "IGBO REPLY" in ig
 
 
+def test_detected_igbo_replies_in_igbo_even_if_tenant_did_not_tick_it():
+    cfg = default_config("tid", "Mama Put Kitchen")
+    cfg.languages = ["en", "pid"]
+    sys_prompt, _ = build(
+        tenant_config=cfg, retrieved_chunks=[], history=[],
+        user_message= "Ego ole ka ofe ose bu?", detected_language="ig",
+    )
+    assert "HARD LANGUAGE RULE" in sys_prompt
+    assert "Igbo" in sys_prompt
+    assert "has not enabled" not in sys_prompt
+
+
 def test_english_path_omits_pidgin_block():
     cfg = default_config("tid", "Acme")
     hits = []

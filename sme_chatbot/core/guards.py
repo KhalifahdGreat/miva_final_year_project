@@ -39,32 +39,71 @@ _PRICE_FALLBACK = {
 # ---------------------------------------------------------------------------
 
 
-# Money mentions: ₦4,500, NGN 4500, naira 4500, or the KB form "4500 naira".
-_AMOUNT = r"(\d{1,3}(?:[,.\s]\d{3})*(?:\.\d{1,2})?|\d{2,7}(?:\.\d{1,2})?)"
+# Digit groups: 4,500 | 4 500 | 4500 | 4500.00  (grouped form must include a separator)
+_DIGITS = (
+    r"(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?"
+    r"|\d{1,3}(?: \d{3})+(?:\.\d{1,2})?"
+    r"|\d+(?:\.\d{1,2})?)"
+)
 _NGN_PRICE = re.compile(
-    rf"(?:₦|\bN(?:GN)?\s?|\bnaira\s+)\s?{_AMOUNT}"
-    rf"|{_AMOUNT}\s*(?:naira|ngn)\b",
+    rf"(?:₦|#)\s*{_DIGITS}\s*(k\b)?"
+    rf"|\bNGN\s*{_DIGITS}\s*(k\b)?"
+    rf"|\bnaira\s*{_DIGITS}"
+    rf"|{_DIGITS}\s*(k\s*)?(?:naira|ngn)\b"
+    rf"|\bN(?=[\s.]?\d){_DIGITS}\s*(k\b)?",
     re.IGNORECASE,
 )
 _BVN_NIN = re.compile(r"\b\d{11}\b")
 _CARD = re.compile(r"\b(?:\d{4}[\s-]?){3}\d{4}\b")
 _PHONE = re.compile(r"(?:\+234|0)[789][01]\d{8}")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_MIN_NAIRA = 20.0  # ignore stray N9 / 9am false hits
+
+
+def _match_amount(m: re.Match[str]) -> float | None:
+    raw = next((g for g in m.groups() if g and re.search(r"\d", g)), None)
+    if not raw:
+        return None
+    whole = m.group(0).lower()
+    cleaned = re.sub(r"[,\s]", "", raw)
+    try:
+        value = float(cleaned)
+    except ValueError:
+        return None
+    if re.search(r"\dk", whole.lower().replace(" ", "")):
+        value *= 1000
+    if value < _MIN_NAIRA:
+        return None
+    return value
+
+
+def _phone_spans(text: str) -> list[tuple[int, int]]:
+    return [m.span() for m in _PHONE.finditer(text)]
+
+
+def _overlaps_phone(span: tuple[int, int], phones: list[tuple[int, int]]) -> bool:
+    a, b = span
+    return any(a < pe and b > ps for ps, pe in phones)
 
 
 def _amounts(text: str) -> set[float]:
-    """Extract numeric amounts from naira mentions, normalised."""
+    """Extract naira amounts, normalised (4,500 == 4500 == 4.5k)."""
+    if not text:
+        return set()
+    phones = _phone_spans(text)
     out: set[float] = set()
     for m in _NGN_PRICE.finditer(text):
-        raw = next((g for g in m.groups() if g), None)
-        if not raw:
+        if _overlaps_phone(m.span(), phones):
             continue
-        cleaned = re.sub(r"[,\s]", "", raw)
-        try:
-            out.add(float(cleaned))
-        except ValueError:
-            continue
+        value = _match_amount(m)
+        if value is not None:
+            out.add(value)
     return out
+
+
+def extract_naira_amounts(text: str) -> set[float]:
+    """Public wrapper used by tests."""
+    return _amounts(text)
 
 
 # ---------------------------------------------------------------------------
@@ -103,9 +142,26 @@ def _price_fallback(lang: str, tenant_fallback: str) -> str:
 
 
 def _drop_invented_price_sentences(text: str, invented: set[float]) -> str:
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    kept = [p for p in parts if not (_amounts(p) & invented)]
-    return " ".join(kept).strip()
+    """Remove invented price spans; keep grounded clauses in any language."""
+
+    def repl(m: re.Match[str]) -> str:
+        value = _match_amount(m)
+        if value is not None and value in invented:
+            return ""
+        return m.group(0)
+
+    cleaned = _NGN_PRICE.sub(repl, text)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;!?])", r"\1", cleaned)
+    cleaned = re.sub(
+        r"\b(?:bụ|bu|is|be|na|for|at|of|bụrụ)\s*[.,;]",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    parts = re.split(r"(?<=[.!?;])\s+|\n+", cleaned.strip())
+    kept = [p.strip() for p in parts if len(p.strip()) >= 8]
+    return " ".join(kept).strip(" ,;.-")
 
 
 def apply_guards(

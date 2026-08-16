@@ -36,6 +36,8 @@ _LOANWORDS = frozenset(
         "whatsapp", "transfer", "card", "cash", "delivery", "order",
         "iphone", "sku", "menu", "kitchen",
         "okuko", "kaza", "adie", "ofe", "obe", "akpu", "ji",
+        "coke", "fanta", "sprite", "afang", "shawarma", "ugwu",
+        "tuesday", "wednesday", "thursday", "friday",
     }
 )
 
@@ -127,6 +129,8 @@ IGBO_TOKENS: frozenset[str] = frozenset(
         "zuta", "ere", "emeghe", "emechi", "edozi", "gote",
         "azuta", "mgbe", "nri", "gini", "biko",
         "ka", "di", "ga",
+        "ogologo", "tupu", "kwadebe", "ibute", "acho", "karama",
+        "itinye", "nwere",
     }
 )
 _IG_FUNCTION = frozenset(
@@ -157,6 +161,10 @@ PIDGIN_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bwetin\s+(dey|be)\b", re.IGNORECASE),
     re.compile(r"\bi\s+fit\b", re.IGNORECASE),
     re.compile(r"\bhow\s+much\s+be\b", re.IGNORECASE),
+    re.compile(r"\bwetin\s+be\b", re.IGNORECASE),
+    re.compile(r"\buna\s+(dey|get|wan)\b", re.IGNORECASE),
+    re.compile(r"\byou\s+dey\b", re.IGNORECASE),
+    re.compile(r"\bi\s+fit\s+\w+", re.IGNORECASE),
 ]
 
 _YO_PATTERNS: list[re.Pattern[str]] = [
@@ -166,6 +174,8 @@ _YO_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bnigba\s+wo\b", re.IGNORECASE),
     re.compile(r"\bmeloo\s+ni\b", re.IGNORECASE),
     re.compile(r"\bse\s+e\b", re.IGNORECASE),
+    re.compile(r"\belo\s+ni\s+\w+", re.IGNORECASE),
+    re.compile(r"\be\s+wa\b", re.IGNORECASE),
 ]
 
 _HA_PATTERNS: list[re.Pattern[str]] = [
@@ -175,6 +185,8 @@ _HA_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bza\s+a\b", re.IGNORECASE),
     re.compile(r"\bkuna\s+\w+\b", re.IGNORECASE),
     re.compile(r"\bina\s+\w+\b", re.IGNORECASE),
+    re.compile(r"\bkuna\s+da\b", re.IGNORECASE),
+    re.compile(r"\bba\s+.+\s+ba\b", re.IGNORECASE),
 ]
 
 _IG_PATTERNS: list[re.Pattern[str]] = [
@@ -183,6 +195,9 @@ _IG_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bkedu\b", re.IGNORECASE),
     re.compile(r"\bunu\s+na\b", re.IGNORECASE),
     re.compile(r"\bna-e\w+", re.IGNORECASE),
+    re.compile(r"\b(?:anyi|unu)\s+nwere\b", re.IGNORECASE),
+    re.compile(r"\bga-(?:ewe|akwu|eme)\b", re.IGNORECASE),
+    re.compile(r"\bofe\s+\w+", re.IGNORECASE),
 ]
 
 
@@ -204,6 +219,9 @@ _RETRIEVAL_GLOSS: dict[str, str] = {
     "azu": "fish", "anu": "meat", "ugwu": "ugu pumpkin leaf",
     "karama": "bottle drink", "itinye": "add extra",
     "akwukwo": "vegetable leaf",
+    "sii": "open hours", "nsii": "open hours",
+    "bude": "open hours", "rufe": "close hours",
+    "nwere": "have available",
 }
 
 
@@ -226,8 +244,12 @@ _FOLD_MAP = str.maketrans(
 )
 
 
+_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff\u2060"), None)
+
+
 def _fold(text: str) -> str:
-    nfkd = unicodedata.normalize("NFKD", text.lower())
+    cleaned = unicodedata.normalize("NFKC", text).translate(_ZERO_WIDTH)
+    nfkd = unicodedata.normalize("NFKD", cleaned.lower())
     stripped = "".join(ch for ch in nfkd if unicodedata.category(ch) != "Mn")
     return stripped.translate(_FOLD_MAP)
 
@@ -256,8 +278,20 @@ def _count(bag: set[str], lexicon: frozenset[str]) -> int:
     return len((bag - _LOANWORDS) & lexicon)
 
 
+_INTENT_HINTS: list[tuple[frozenset[str], str]] = [
+    (frozenset({"elo", "meloo", "nawa", "ole", "ego", "iye", "owo", "farashi", "farashin", "kudi"}),
+     "price how much naira"),
+    (frozenset({"nibo", "ebee"}), "location address where"),
+    (frozenset({"nigba", "oge", "lokaci", "sii", "nsii", "emeghe", "budewa", "emechi", "rufewa", "bude", "rufe"}),
+     "opening hours time"),
+    (frozenset({"gbe", "kawo", "ibute"}), "delivery deliver"),
+]
+
+
 def detect(text: str) -> LangResult:
     if not text or not text.strip():
+        return LangResult("unknown", False, {})
+    if not re.search(r"[\w]", text, re.UNICODE):
         return LangResult("unknown", False, {})
 
     tokens = _bag(text)
@@ -342,14 +376,21 @@ def detect(text: str) -> LangResult:
     )
 
 
-def expand_query_for_retrieval(text: str) -> str:
+def expand_query_for_retrieval(text: str, lang: str | None = None) -> str:
     extras: list[str] = []
     seen: set[str] = set()
-    for tok in _bag(text):
+    tokens = _bag(text)
+    bag = set(tokens)
+    for tok in tokens:
         gloss = _RETRIEVAL_GLOSS.get(tok)
         if gloss and gloss not in seen:
             extras.append(gloss)
             seen.add(gloss)
+    if lang in ("yo", "ha", "ig") or (lang is None and extras):
+        for keys, hint in _INTENT_HINTS:
+            if bag & keys and hint not in seen:
+                extras.append(hint)
+                seen.add(hint)
     if not extras:
         return text
     return f"{text} {' '.join(extras)}"
