@@ -48,7 +48,7 @@ class AppSettings(BaseSettings):
 
     # LLM
     groq_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-120b"
     llm_timeout_s: float = 10.0
     llm_max_retries: int = 3
 

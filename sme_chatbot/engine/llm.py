@@ -19,13 +19,26 @@ log = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = (1.0, 3.0, 8.0)
 
+# Groq retired llama-3.3-70b-versatile on 2026-08-16 for free/developer tiers.
+_RETIRED_MODELS = {
+    "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+    "llama-3.1-70b-versatile": "openai/gpt-oss-120b",
+}
+_LIVE_DEFAULT = "openai/gpt-oss-120b"
+
+
+def resolve_llm_model(model: str | None) -> str:
+    name = (model or "").strip() or _LIVE_DEFAULT
+    return _RETIRED_MODELS.get(name, name)
+
 
 class LLMClient:
     """Thin wrapper around the Groq SDK chat-completions endpoint."""
 
     def __init__(self, config: EngineConfig) -> None:
         self._api_key = config.groq_api_key
-        self._model = config.llm_model
+        self._model = resolve_llm_model(config.llm_model)
         self._groq = None
 
     def _client(self):
@@ -66,6 +79,12 @@ class LLMClient:
             except Exception as exc:
                 last_err = exc
                 err_str = str(exc).lower()
+                if any(t in err_str for t in ("does not exist", "model_not_found", "404")):
+                    fallback = _LIVE_DEFAULT
+                    if self._model != fallback:
+                        log.warning("LLM model %s unavailable; switching to %s", self._model, fallback)
+                        self._model = fallback
+                        continue
                 retryable = any(
                     t in err_str
                     for t in ("rate_limit", "429", "503", "502", "500", "timeout", "connection")

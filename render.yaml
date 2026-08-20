@@ -57,7 +57,7 @@ envVarGroups:
 
       # LLM / engine settings (safe defaults).
       - key: LLM_MODEL
-        value: llama-3.3-70b-versatile
+        value: openai/gpt-oss-120b
       - key: OFOFO_EMBEDDING_MODEL
         value: all-MiniLM-L6-v2
 

@@ -21,9 +21,11 @@ class EngineConfig:
 
     project_root: Path = _DEFAULT_PROJECT_ROOT
 
-    # LLM (Groq-hosted Llama 3.3 70B by default).
+    # LLM (Groq-hosted; Llama 3.3 70B was retired 2026-08-16).
     groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = field(
+        default_factory=lambda: os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
+    )
 
     # Vector store. Two modes:
     #   * Local dev  -> Milvus Lite, file-backed at `vector_db_path`.
